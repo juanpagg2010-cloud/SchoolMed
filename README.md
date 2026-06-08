@@ -258,4 +258,4 @@ Cancelar excusa:
 
 ## Autor
 
-Proyecto desarrollado para la gestion de excusas medicas escolares.
+Hecho por Juan pablo Barragan y Juan David Garcia
