@@ -1,6 +1,9 @@
 import bcrypt from "bcrypt";
 import MedicalExcuse from "../models/medicalExcuse.js";
-import { sendMedicalExcuseVerificationCode } from "./emailService.js";
+import {
+  sendMedicalExcuseReviewResult,
+  sendMedicalExcuseVerificationCode,
+} from "./emailService.js";
 
 const VERIFICATION_CODE_MINUTES = 10;
 const MAX_VERIFICATION_ATTEMPTS = 5;
@@ -46,6 +49,31 @@ const ensureOwner = (excusa, userId) => {
     const error = new Error("No puedes verificar una excusa de otro acudiente.");
     error.statusCode = 403;
     throw error;
+  }
+};
+
+// Envia el resultado de coordinacion al correo del acudiente sin bloquear la decision.
+const notifyGuardianReviewResult = async (excusa) => {
+  if (!["Aprobada", "Rechazada"].includes(excusa.estado)) {
+    return { sent: false, reason: "Estado no notificable" };
+  }
+
+  const guardianEmail = excusa.acudienteId?.email;
+
+  if (!guardianEmail) {
+    return { sent: false, reason: "Acudiente sin correo" };
+  }
+
+  try {
+    return await sendMedicalExcuseReviewResult({
+      email: guardianEmail,
+      rejectionReason: excusa.motivoRechazo,
+      status: excusa.estado,
+      studentName: excusa.nombreEstudiante,
+    });
+  } catch (error) {
+    console.error(`No se pudo enviar correo de revision: ${error.message}`);
+    return { sent: false, reason: error.message };
   }
 };
 
@@ -200,13 +228,17 @@ export const reviewMedicalExcuse = async (id, coordinatorId, review) => {
       fechaRevision: new Date(),
     },
     { new: true, runValidators: true },
-  );
+  )
+    .populate("acudienteId", "name email phone")
+    .populate("coordinadorId", "name email");
 
   if (!excusa) {
     const error = new Error("Excusa medica no encontrada.");
     error.statusCode = 404;
     throw error;
   }
+
+  await notifyGuardianReviewResult(excusa);
 
   return excusa;
 };

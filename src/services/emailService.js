@@ -43,6 +43,49 @@ export const sendMedicalExcuseVerificationCode = async ({ code, email, studentNa
   return { sent: true };
 };
 
+// Notifica al acudiente cuando coordinacion aprueba o rechaza la excusa.
+export const sendMedicalExcuseReviewResult = async ({
+  email,
+  rejectionReason,
+  status,
+  studentName,
+}) => {
+  const transporter = getTransporter();
+
+  if (!transporter) {
+    console.warn("SMTP no configurado. No se envio resultado de revision.");
+    return { sent: false, reason: "SMTP no configurado" };
+  }
+
+  const isApproved = status === "Aprobada";
+  const subject = isApproved
+    ? "Excusa medica aprobada"
+    : "Excusa medica rechazada";
+  const resultText = isApproved
+    ? "La excusa medica fue aprobada por coordinacion."
+    : "La excusa medica fue rechazada por coordinacion.";
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM || process.env.SMTP_USER,
+    to: email,
+    subject,
+    text: [
+      resultText,
+      "",
+      `Estudiante: ${studentName || "No especificado"}`,
+      `Estado: ${status}`,
+      rejectionReason ? `Motivo del rechazo: ${rejectionReason}` : "",
+      "",
+      "Puedes consultar el detalle en SchoolMed.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+
+  return { sent: true };
+};
+
 export default {
+  sendMedicalExcuseReviewResult,
   sendMedicalExcuseVerificationCode,
 };
