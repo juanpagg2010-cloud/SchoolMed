@@ -1,5 +1,6 @@
 import { Schema, model } from "mongoose";
 
+// Modelo de usuario para autenticacion, roles y permisos dentro del sistema.
 const userSchema = new Schema(
   {
     name: {
