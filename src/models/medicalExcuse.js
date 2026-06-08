@@ -51,8 +51,33 @@ const medicalExcuseSchema = new Schema(
     },
     estado: {
       type: String,
-      enum: ["Pendiente", "Aprobada", "Rechazada", "Cancelada"],
-      default: "Pendiente",
+      enum: [
+        "PendienteVerificacion",
+        "PendienteRevision",
+        "Aprobada",
+        "Rechazada",
+        "Cancelada",
+      ],
+      default: "PendienteVerificacion",
+    },
+    verificacion: {
+      codigoHash: {
+        type: String,
+        select: false,
+      },
+      expiraEn: {
+        type: Date,
+      },
+      intentos: {
+        type: Number,
+        default: 0,
+      },
+      verificadoEn: {
+        type: Date,
+      },
+      enviadoEn: {
+        type: Date,
+      },
     },
     coordinadorId: {
       type: Schema.Types.ObjectId,
