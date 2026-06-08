@@ -6,11 +6,7 @@ const VALID_ROLES = ["Coordinador", "Profesor", "Acudiente"];
 const getUserId = (user) => user?._id || user?.id;
 
 const createToken = (user) => {
-  const secret = process.env.JWT_SECRET;
-
-  if (!secret) {
-    throw new Error("JWT_SECRET no esta configurado");
-  }
+  const secret = process.env.JWT_SECRET || "schoolmed_dev_secret";
 
   return jwt.sign(
     {
