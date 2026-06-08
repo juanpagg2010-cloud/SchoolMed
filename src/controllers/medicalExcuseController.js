@@ -13,6 +13,7 @@ import {
 const isGuardian = (user) => user?.role === "Acudiente";
 const getUserId = (user) => user?._id || user?.id;
 
+// Controlador para crear una excusa y disparar el codigo de verificacion.
 export const crearExcusaMedica = async (req, res) => {
   try {
     const { emailResult, excusa } = await createMedicalExcuse(
@@ -36,6 +37,7 @@ export const crearExcusaMedica = async (req, res) => {
   }
 };
 
+// Controlador para validar el codigo enviado al correo del acudiente.
 export const verificarCodigoExcusa = async (req, res) => {
   try {
     const excusa = await verifyMedicalExcuseCode(req.params.id, getUserId(req.user), req.body.codigo);
@@ -53,6 +55,7 @@ export const verificarCodigoExcusa = async (req, res) => {
   }
 };
 
+// Controlador para reenviar un codigo de verificacion.
 export const reenviarCodigoExcusa = async (req, res) => {
   try {
     const { emailResult, excusa } = await resendMedicalExcuseCode(
@@ -75,6 +78,7 @@ export const reenviarCodigoExcusa = async (req, res) => {
   }
 };
 
+// Controlador para listar las excusas del acudiente autenticado.
 export const obtenerMisExcusas = async (req, res) => {
   try {
     const excusas = await getGuardianExcuses(getUserId(req.user));
@@ -92,6 +96,7 @@ export const obtenerMisExcusas = async (req, res) => {
   }
 };
 
+// Controlador para listar excusas visibles para coordinacion.
 export const obtenerExcusasParaCoordinador = async (req, res) => {
   try {
     const excusas = await getCoordinatorExcuses(req.query);
@@ -109,6 +114,7 @@ export const obtenerExcusasParaCoordinador = async (req, res) => {
   }
 };
 
+// Controlador para agrupar excusas por grado escolar.
 export const obtenerExcusasPorGrado = async (req, res) => {
   try {
     const { excusas, grados } = await getExcusesGroupedByGrade();
@@ -126,6 +132,7 @@ export const obtenerExcusasPorGrado = async (req, res) => {
   }
 };
 
+// Controlador para listar excusas aprobadas disponibles para docentes.
 export const obtenerExcusasParaProfesor = async (req, res) => {
   try {
     const excusas = await getTeacherExcuses(req.query);
@@ -143,6 +150,7 @@ export const obtenerExcusasParaProfesor = async (req, res) => {
   }
 };
 
+// Controlador para consultar una excusa especifica.
 export const obtenerExcusaPorId = async (req, res) => {
   try {
     const excusa = await getMedicalExcuseById(req.params.id);
@@ -167,6 +175,7 @@ export const obtenerExcusaPorId = async (req, res) => {
   }
 };
 
+// Controlador para aprobar una excusa verificada.
 export const aprobarExcusa = async (req, res) => {
   try {
     const excusa = await reviewMedicalExcuse(req.params.id, getUserId(req.user), {
@@ -188,6 +197,7 @@ export const aprobarExcusa = async (req, res) => {
   }
 };
 
+// Controlador para rechazar una excusa verificada.
 export const rechazarExcusa = async (req, res) => {
   try {
     const { motivoRechazo } = req.body;
@@ -217,6 +227,7 @@ export const rechazarExcusa = async (req, res) => {
   }
 };
 
+// Controlador para cancelar una excusa verificada.
 export const cancelarExcusa = async (req, res) => {
   try {
     const { motivoCancelacion } = req.body;

@@ -1,5 +1,6 @@
 import { isValidObjectId } from "mongoose";
 
+// Evita consultar MongoDB con ids que no tienen formato ObjectId valido.
 const validateObjectId =
   (paramName = "id") =>
   (req, res, next) => {

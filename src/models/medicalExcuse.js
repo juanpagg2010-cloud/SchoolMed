@@ -1,5 +1,6 @@
 import { Schema, model } from "mongoose";
 
+// Modelo principal de excusas medicas con verificacion por correo y revision institucional.
 const medicalExcuseSchema = new Schema(
   {
     acudienteId: {
@@ -51,6 +52,7 @@ const medicalExcuseSchema = new Schema(
     },
     estado: {
       type: String,
+      // Flujo: acudiente verifica, coordinador revisa y profesor consulta aprobadas.
       enum: [
         "PendienteVerificacion",
         "PendienteRevision",
@@ -61,6 +63,7 @@ const medicalExcuseSchema = new Schema(
       default: "PendienteVerificacion",
     },
     verificacion: {
+      // El codigo se guarda hasheado; nunca se persiste en texto plano.
       codigoHash: {
         type: String,
         select: false,

@@ -1,5 +1,6 @@
 import { getAllUsers, updateUserById } from "../services/userService.js";
 
+// Controlador para listar usuarios con filtros opcionales.
 export const getUsers = async (req, res) => {
   try {
     const users = await getAllUsers(req.query);
@@ -17,6 +18,7 @@ export const getUsers = async (req, res) => {
   }
 };
 
+// Controlador para actualizar datos de un usuario.
 export const updateUser = async (req, res) => {
   try {
     const user = await updateUserById(req.params.id, req.body);

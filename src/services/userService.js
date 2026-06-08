@@ -1,6 +1,7 @@
 import User from "../models/userModel.js";
 import { VALID_ROLES } from "./authService.js";
 
+// Lista usuarios con filtros opcionales por rol y estado.
 export const getAllUsers = async ({ role, isActive } = {}) => {
   const filters = {};
 
@@ -21,6 +22,7 @@ export const getAllUsers = async ({ role, isActive } = {}) => {
   return User.find(filters).sort({ role: 1, name: 1 });
 };
 
+// Actualiza datos administrativos de un usuario.
 export const updateUserById = async (id, payload) => {
   const { name, email, role, phone, isActive } = payload;
 

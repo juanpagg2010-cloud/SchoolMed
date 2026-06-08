@@ -1,3 +1,4 @@
+// Restringe rutas segun los roles permitidos para el usuario autenticado.
 export const authorizeRoles = (...roles) => (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({

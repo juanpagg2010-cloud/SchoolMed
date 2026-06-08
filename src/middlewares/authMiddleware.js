@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 
+// Valida el JWT, busca el usuario activo y lo adjunta en req.user.
 export const protect = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization || "";

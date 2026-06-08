@@ -6,6 +6,7 @@ dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
+// Punto de entrada del backend: carga variables, conecta MongoDB y levanta Express.
 const startServer = async () => {
   try {
     await connectDB();

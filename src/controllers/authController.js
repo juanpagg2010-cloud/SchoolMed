@@ -8,6 +8,7 @@ import {
 
 const getUserId = (user) => user?._id || user?.id;
 
+// Estandariza la respuesta de autenticacion con token y usuario sin contrasena.
 const sendAuthResponse = (res, statusCode, user) => {
   const token = createToken(user);
 
@@ -18,6 +19,7 @@ const sendAuthResponse = (res, statusCode, user) => {
   });
 };
 
+// Controlador para registrar usuarios.
 export const register = async (req, res) => {
   try {
     const user = await registerUser(req.body);
@@ -30,6 +32,7 @@ export const register = async (req, res) => {
   }
 };
 
+// Controlador para iniciar sesion.
 export const login = async (req, res) => {
   try {
     const user = await loginUser(req.body);
@@ -42,6 +45,7 @@ export const login = async (req, res) => {
   }
 };
 
+// Controlador para consultar el perfil del usuario autenticado.
 export const getProfile = async (req, res) => {
   try {
     const userId = getUserId(req.user);

@@ -4,6 +4,7 @@ import User from "../models/userModel.js";
 
 export const VALID_ROLES = ["Coordinador", "Profesor", "Acudiente"];
 
+// Genera el JWT usado por el cliente para acceder a rutas protegidas.
 export const createToken = (user) => {
   if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET no esta configurado");
@@ -19,12 +20,14 @@ export const createToken = (user) => {
   );
 };
 
+// Limpia la contrasena antes de devolver datos del usuario al cliente.
 export const removePassword = (user) => {
   const userData = user.toObject();
   delete userData.password;
   return userData;
 };
 
+// Registra usuarios validando campos, roles y duplicados.
 export const registerUser = async ({ name, email, password, role = "Acudiente", phone }) => {
   if (!name || !email || !password || !phone) {
     const error = new Error("Nombre, correo, contrasena y telefono son obligatorios.");
@@ -59,6 +62,7 @@ export const registerUser = async ({ name, email, password, role = "Acudiente", 
   });
 };
 
+// Valida credenciales y estado del usuario antes de iniciar sesion.
 export const loginUser = async ({ email, password }) => {
   if (!email || !password) {
     const error = new Error("Correo y contrasena son obligatorios.");
@@ -83,6 +87,7 @@ export const loginUser = async ({ email, password }) => {
   return user;
 };
 
+// Consulta el perfil del usuario autenticado.
 export const getUserProfile = async (userId) => {
   const user = await User.findById(userId);
 

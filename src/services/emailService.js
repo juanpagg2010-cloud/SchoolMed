@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 
+// Crea el transporte SMTP usando el proveedor configurado en variables de entorno.
 const getTransporter = () => {
   const { SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_SECURE, SMTP_USER } = process.env;
 
@@ -18,6 +19,7 @@ const getTransporter = () => {
   });
 };
 
+// Envia al acudiente el codigo que confirma el envio de una excusa medica.
 export const sendMedicalExcuseVerificationCode = async ({ code, email, studentName }) => {
   const transporter = getTransporter();
 

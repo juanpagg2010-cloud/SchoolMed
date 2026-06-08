@@ -5,6 +5,7 @@ import { sendMedicalExcuseVerificationCode } from "./emailService.js";
 const VERIFICATION_CODE_MINUTES = 10;
 const MAX_VERIFICATION_ATTEMPTS = 5;
 
+// Normaliza los datos del archivo subido para guardarlos dentro de la excusa.
 const getUploadedFile = (file) => {
   if (!file) {
     return undefined;
@@ -19,15 +20,18 @@ const getUploadedFile = (file) => {
   };
 };
 
+// Calcula si una excusa aprobada sigue vigente para el docente.
 const getValidity = (excuse) => {
   const today = new Date();
   return today <= excuse.fechaFin ? "Activa" : "Vencida";
 };
 
+// Genera un codigo numerico de 6 digitos para la verificacion por correo.
 const createVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+// Construye los datos seguros de verificacion que se guardan en MongoDB.
 const buildVerification = async (code) => ({
   codigoHash: await bcrypt.hash(code, 10),
   expiraEn: new Date(Date.now() + VERIFICATION_CODE_MINUTES * 60 * 1000),
@@ -36,6 +40,7 @@ const buildVerification = async (code) => ({
   enviadoEn: new Date(),
 });
 
+// Garantiza que solo el acudiente propietario pueda verificar o reenviar su codigo.
 const ensureOwner = (excusa, userId) => {
   if (String(excusa.acudienteId) !== String(userId)) {
     const error = new Error("No puedes verificar una excusa de otro acudiente.");
@@ -44,6 +49,7 @@ const ensureOwner = (excusa, userId) => {
   }
 };
 
+// Crea la excusa como PendienteVerificacion y envia el codigo al correo del acudiente.
 export const createMedicalExcuse = async (userId, userEmail, payload, file) => {
   const {
     nombreEstudiante,
@@ -101,10 +107,12 @@ export const createMedicalExcuse = async (userId, userEmail, payload, file) => {
   return { excusa: publicExcuse, emailResult };
 };
 
+// Lista las excusas creadas por el acudiente autenticado.
 export const getGuardianExcuses = (userId) => {
   return MedicalExcuse.find({ acudienteId: userId }).sort({ createdAt: -1 });
 };
 
+// Lista excusas visibles para coordinacion; oculta las que aun no verifico el acudiente.
 export const getCoordinatorExcuses = ({ grado, grupo, estado } = {}) => {
   const filtro = estado ? { estado } : { estado: { $ne: "PendienteVerificacion" } };
 
@@ -118,6 +126,7 @@ export const getCoordinatorExcuses = ({ grado, grupo, estado } = {}) => {
     .sort({ grado: 1, grupo: 1, createdAt: -1 });
 };
 
+// Agrupa excusas visibles para coordinacion por grado escolar.
 export const getExcusesGroupedByGrade = async () => {
   const excusas = await MedicalExcuse.find({ estado: { $ne: "PendienteVerificacion" } })
     .populate("acudienteId", "name email phone")
@@ -133,6 +142,7 @@ export const getExcusesGroupedByGrade = async () => {
   return { excusas, grados };
 };
 
+// Devuelve solo excusas aprobadas para consulta docente.
 export const getTeacherExcuses = async ({ grado, grupo } = {}) => {
   const filtro = { estado: "Aprobada" };
 
@@ -151,6 +161,7 @@ export const getTeacherExcuses = async ({ grado, grupo } = {}) => {
   }));
 };
 
+// Consulta una excusa por id con datos basicos del acudiente y coordinador.
 export const getMedicalExcuseById = async (id) => {
   const excusa = await MedicalExcuse.findById(id)
     .populate("acudienteId", "name email phone")
@@ -165,6 +176,7 @@ export const getMedicalExcuseById = async (id) => {
   return excusa;
 };
 
+// Aplica la decision del coordinador sobre una excusa ya verificada.
 export const reviewMedicalExcuse = async (id, coordinatorId, review) => {
   const currentExcuse = await MedicalExcuse.findById(id);
 
@@ -199,6 +211,7 @@ export const reviewMedicalExcuse = async (id, coordinatorId, review) => {
   return excusa;
 };
 
+// Valida el codigo enviado al correo y mueve la excusa a PendienteRevision.
 export const verifyMedicalExcuseCode = async (id, userId, code) => {
   if (!code) {
     const error = new Error("El codigo de verificacion es obligatorio.");
@@ -258,6 +271,7 @@ export const verifyMedicalExcuseCode = async (id, userId, code) => {
   return getMedicalExcuseById(id);
 };
 
+// Genera y envia un nuevo codigo cuando el anterior expiro o se bloqueo.
 export const resendMedicalExcuseCode = async (id, userId, userEmail) => {
   const excusa = await MedicalExcuse.findById(id).select("+verificacion.codigoHash");
 

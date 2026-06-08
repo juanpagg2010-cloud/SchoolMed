@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
 import dns from "node:dns";
 
+// Usa DNS publicos para evitar fallos comunes resolviendo MongoDB Atlas.
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
+// Conecta la aplicacion a MongoDB usando la cadena definida en .env.
 const connectDB = async () => {
   try {
     if (!process.env.MONGO_URI) {
