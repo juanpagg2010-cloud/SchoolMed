@@ -1,5 +1,5 @@
-import cors from "cors";
 import dotenv from "dotenv";
+<<<<<<< HEAD
 import express from "express";
 import mongoose from "mongoose";
 import { dirname, join } from "node:path";
@@ -7,45 +7,33 @@ import { fileURLToPath } from "node:url";
 import authRoutes from "./routes/authRoutes.js";
 import medicalExcuseRoutes from "./routes/medicalExcuseRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+=======
+import app from "./app.js";
+import connectDB from "./config/db.js";
+>>>>>>> 84e06b794f6efba1ec001279046c9d0b9247cf60
 
 dotenv.config();
 
-const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/schoolmed";
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const clientPath = join(__dirname, "..", "client");
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(clientPath));
+// Punto de entrada del backend: carga variables, conecta MongoDB y levanta Express.
+const startServer = async () => {
+  try {
+    await connectDB();
 
+<<<<<<< HEAD
 app.use("/api/auth", authRoutes);
 app.use("/api/medical-excuses", medicalExcuseRoutes);
 app.use("/api/users", userRoutes);
+=======
+    app.listen(PORT, () => {
+      console.log(`SchoolMed API escuchando en http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error(`No se pudo iniciar el servidor: ${error.message}`);
+    process.exit(1);
+  }
+};
+>>>>>>> 84e06b794f6efba1ec001279046c9d0b9247cf60
 
-app.get("/", (_req, res) => {
-  res.sendFile(join(clientPath, "index.html"));
-});
-
-app.use((_req, res) => {
-  res.status(404).json({
-    ok: false,
-    message: "Ruta no encontrada.",
-  });
-});
-
-mongoose
-  .connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 5000,
-  })
-  .then(() => {
-    console.log("MongoDB conectado correctamente.");
-  })
-  .catch((error) => {
-    console.error("MongoDB no esta conectado:", error.message);
-  });
-
-app.listen(PORT, () => {
-  console.log(`SchoolMed disponible en http://localhost:${PORT}`);
-});
+startServer();
