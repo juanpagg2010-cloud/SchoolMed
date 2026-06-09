@@ -127,6 +127,29 @@ const saveSession = ({ token, user }) => {
   localStorage.setItem("schoolmed_user", JSON.stringify(user));
 };
 
+const showSessionTransition = ({ title, message, detail }) => {
+  const overlay = document.createElement("div");
+  overlay.className = "session-transition";
+  overlay.innerHTML = `
+    <div class="session-transition__panel">
+      <div class="session-transition__orb">
+        <span>SM</span>
+      </div>
+      <p class="session-transition__kicker">${detail}</p>
+      <h2>${title}</h2>
+      <p class="session-transition__copy">${message}</p>
+      <div class="session-transition__bar"><span></span></div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("is-visible"));
+
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 1250);
+  });
+};
+
 const redirectToDashboard = (user) => {
   const dashboards = {
     Coordinador: "./coordinador-dashboard.html",
@@ -179,7 +202,12 @@ form.addEventListener("submit", async (event) => {
       "success",
     );
     form.reset();
-    window.setTimeout(() => redirectToDashboard(data.user), 700);
+    await showSessionTransition({
+      title: "Acceso confirmado",
+      message: "Estamos preparando tu panel con la informacion de SchoolMed.",
+      detail: data.user?.role || "Sesion activa",
+    });
+    redirectToDashboard(data.user);
   } catch (error) {
     showMessage(error.message, "error");
   } finally {

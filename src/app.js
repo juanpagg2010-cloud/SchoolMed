@@ -28,6 +28,10 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+app.get("/favicon.ico", (req, res) => {
+  res.sendFile(join(clientPath, "favicon.svg"));
+});
+
 // Version actual de la API. /api se conserva como alias simple.
 app.use("/api/v1", routes);
 app.use("/api", routes);

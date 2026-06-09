@@ -7,6 +7,20 @@
     @apply w-full rounded-lg border border-white/10 bg-slate-950/45 px-4 py-3 text-sm font-semibold text-slate-100 outline-none transition duration-300 placeholder:text-slate-500 hover:border-white/20 hover:bg-white/[0.07] focus:border-cyan-300 focus:bg-white/[0.09] focus:ring-4 focus:ring-cyan-300/10;
   }
 
+  select.field {
+    @apply cursor-pointer bg-slate-900 text-slate-100;
+    color-scheme: dark;
+  }
+
+  select.field option {
+    @apply bg-slate-900 text-slate-100;
+  }
+
+  select.field option:checked,
+  select.field option:hover {
+    @apply bg-cyan-600 text-white;
+  }
+
   .primary-action {
     @apply relative overflow-hidden rounded-lg bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-950/25 transition duration-300 hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-cyan-300/20;
   }
@@ -184,6 +198,80 @@
 
   .role-hero__copy {
     @apply flex min-h-72 flex-col justify-center;
+  }
+
+  .session-transition {
+    @apply fixed inset-0 z-[9999] grid place-items-center bg-slate-950/80 px-5 opacity-0 backdrop-blur-2xl transition duration-500;
+  }
+
+  .session-transition.is-visible {
+    @apply opacity-100;
+  }
+
+  .session-transition::before {
+    content: "";
+    @apply absolute inset-0 opacity-80;
+    background:
+      radial-gradient(circle at 26% 24%, rgba(34, 211, 238, 0.26), transparent 22rem),
+      radial-gradient(circle at 76% 70%, rgba(16, 185, 129, 0.2), transparent 24rem),
+      linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.82));
+    animation: transition-aurora 1.4s ease-in-out infinite alternate;
+  }
+
+  .session-transition--exit::before {
+    background:
+      radial-gradient(circle at 28% 30%, rgba(248, 113, 113, 0.18), transparent 22rem),
+      radial-gradient(circle at 78% 68%, rgba(34, 211, 238, 0.2), transparent 24rem),
+      linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.86));
+  }
+
+  .session-transition__panel {
+    @apply relative z-10 grid w-full max-w-md justify-items-center gap-4 overflow-hidden rounded-lg border border-white/10 bg-white/[0.075] p-8 text-center shadow-2xl shadow-cyan-950/30 backdrop-blur-2xl;
+    animation: transition-panel-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .session-transition__panel::before {
+    content: "";
+    @apply pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/90 to-transparent;
+  }
+
+  .session-transition__orb {
+    @apply relative grid h-24 w-24 place-items-center rounded-full border border-cyan-200/30 bg-cyan-300/10 text-xl font-black text-white shadow-2xl shadow-cyan-950/40;
+  }
+
+  .session-transition__orb::before,
+  .session-transition__orb::after {
+    content: "";
+    @apply absolute rounded-full border border-cyan-200/35;
+    inset: -10px;
+    animation: transition-ring 1.35s ease-in-out infinite;
+  }
+
+  .session-transition__orb::after {
+    inset: -18px;
+    animation-delay: 0.18s;
+    opacity: 0.65;
+  }
+
+  .session-transition__kicker {
+    @apply mt-3 text-xs font-black uppercase tracking-[0.24em] text-cyan-100;
+  }
+
+  .session-transition__panel h2 {
+    @apply text-3xl font-black tracking-tight text-white;
+  }
+
+  .session-transition__copy {
+    @apply max-w-sm text-sm font-semibold leading-6 text-slate-300;
+  }
+
+  .session-transition__bar {
+    @apply mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10;
+  }
+
+  .session-transition__bar span {
+    @apply block h-full rounded-full bg-cyan-300;
+    animation: transition-progress 1.1s ease-in-out both;
   }
 
   .role-kicker {
@@ -446,6 +534,51 @@
     }
   }
 
+  @keyframes transition-panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px) scale(0.96);
+      filter: blur(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes transition-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.2;
+    }
+    50% {
+      opacity: 0.75;
+    }
+    100% {
+      transform: scale(1.12);
+      opacity: 0;
+    }
+  }
+
+  @keyframes transition-progress {
+    from {
+      width: 0%;
+    }
+    to {
+      width: 100%;
+    }
+  }
+
+  @keyframes transition-aurora {
+    from {
+      transform: translate3d(-1%, -1%, 0) scale(1);
+    }
+    to {
+      transform: translate3d(1%, 1%, 0) scale(1.03);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .aurora-shell::before,
     .aurora-shell::after,
@@ -456,7 +589,12 @@
     .motion-card,
     .flow-line::after,
     .stagger-item,
-    .focus-zone.is-visible {
+    .focus-zone.is-visible,
+    .session-transition::before,
+    .session-transition__panel,
+    .session-transition__orb::before,
+    .session-transition__orb::after,
+    .session-transition__bar span {
       animation: none;
     }
   }

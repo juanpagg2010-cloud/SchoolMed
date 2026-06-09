@@ -828,7 +828,35 @@ roleTabs?.addEventListener("click", (event) => {
 document.querySelector("#logout-button").addEventListener("click", logout);
 document.querySelector("#logout-button-desktop").addEventListener("click", logout);
 
-function logout() {
+const showSessionTransition = ({ title, message, detail }) => {
+  const overlay = document.createElement("div");
+  overlay.className = "session-transition session-transition--exit";
+  overlay.innerHTML = `
+    <div class="session-transition__panel">
+      <div class="session-transition__orb">
+        <span>SM</span>
+      </div>
+      <p class="session-transition__kicker">${detail}</p>
+      <h2>${title}</h2>
+      <p class="session-transition__copy">${message}</p>
+      <div class="session-transition__bar"><span></span></div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("is-visible"));
+
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 1150);
+  });
+};
+
+async function logout() {
+  await showSessionTransition({
+    title: "Sesion cerrada",
+    message: "Protegimos tu acceso y volvemos al inicio.",
+    detail: currentUser?.role || "SchoolMed",
+  });
   localStorage.removeItem("schoolmed_token");
   localStorage.removeItem("schoolmed_user");
   window.location.href = "./index.html";
