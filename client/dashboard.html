@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redireccionando | SchoolMed</title>
+    <link rel="stylesheet" href="./css/output.css" />
+  </head>
+  <body class="grid min-h-screen place-items-center bg-[#080d14] text-slate-100">
+    <p class="text-sm font-black uppercase tracking-[0.2em] text-teal-200">
+      Cargando panel...
+    </p>
+    <script>
+      const user = JSON.parse(localStorage.getItem("schoolmed_user") || "null");
+      const pages = {
+        Coordinador: "./coordinador-dashboard.html",
+        Profesor: "./profesor-dashboard.html",
+        Acudiente: "./padre-dashboard.html",
+      };
+
+      window.location.replace(pages[user?.role] || "./coordinador-dashboard.html");
+    </script>
+  </body>
+</html>

@@ -127,6 +127,16 @@ const saveSession = ({ token, user }) => {
   localStorage.setItem("schoolmed_user", JSON.stringify(user));
 };
 
+const redirectToDashboard = (user) => {
+  const dashboards = {
+    Coordinador: "./coordinador-dashboard.html",
+    Profesor: "./profesor-dashboard.html",
+    Acudiente: "./padre-dashboard.html",
+  };
+
+  window.location.href = dashboards[user?.role] || "./padre-dashboard.html";
+};
+
 const submitAuth = async (payload) => {
   const endpoint = currentMode === "login" ? "login" : "register";
   const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
@@ -169,6 +179,7 @@ form.addEventListener("submit", async (event) => {
       "success",
     );
     form.reset();
+    window.setTimeout(() => redirectToDashboard(data.user), 700);
   } catch (error) {
     showMessage(error.message, "error");
   } finally {

@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import authRoutes from "./routes/authRoutes.js";
+import medicalExcuseRoutes from "./routes/medicalExcuseRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 dotenv.config();
 
@@ -19,6 +21,8 @@ app.use(express.json());
 app.use(express.static(clientPath));
 
 app.use("/api/auth", authRoutes);
+app.use("/api/medical-excuses", medicalExcuseRoutes);
+app.use("/api/users", userRoutes);
 
 app.get("/", (_req, res) => {
   res.sendFile(join(clientPath, "index.html"));

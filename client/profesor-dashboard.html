@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profesor | SchoolMed</title>
+    <link rel="stylesheet" href="./css/output.css" />
+  </head>
+  <body
+    class="min-h-screen bg-[#061018] text-slate-100 antialiased role-teacher"
+    data-dashboard-role="Profesor"
+  >
+    <div class="app-shell aurora-shell role-stage min-h-screen">
+      <header class="floating-header">
+        <div
+          class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8"
+        >
+          <a href="./index.html" class="brand-mark">
+            <span class="brand-icon">SM</span>
+            <span>
+              <span class="block text-lg font-black tracking-tight text-white"
+                >SchoolMed</span
+              >
+              <span
+                id="role-label"
+                class="block text-xs font-bold uppercase tracking-[0.18em] text-cyan-200"
+                >Profesor</span
+              >
+            </span>
+          </a>
+          <nav class="top-nav" aria-label="Navegacion principal">
+            <button type="button" data-jump="teacher-map">Cursos</button>
+            <button type="button" data-jump="teacher-grade">Vigentes</button>
+            <button type="button" data-jump="teacher-feed">Novedades</button>
+          </nav>
+          <div class="flex items-center gap-4">
+            <div class="hidden text-right sm:block">
+              <p id="user-name" class="text-sm font-black text-white">
+                Sin sesion activa
+              </p>
+              <p id="user-email" class="text-xs font-semibold text-slate-400">
+                Ingresa con tu cuenta
+              </p>
+            </div>
+            <button
+              id="logout-button"
+              type="button"
+              class="logout-control"
+            >
+              Salir
+            </button>
+            <button
+              id="logout-button-desktop"
+              type="button"
+              class="hidden"
+            ></button>
+          </div>
+        </div>
+      </header>
+
+      <main class="experience-page mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
+        <section class="role-hero teacher-hero">
+          <div class="role-hero__rail" aria-hidden="true">
+            <span>Aula</span>
+            <span>Cursos</span>
+            <span>Vigencia</span>
+          </div>
+          <div class="role-hero__content">
+            <div class="role-hero__copy">
+              <p id="hero-kicker" class="role-kicker">Aula operativa</p>
+              <h1 id="hero-title" class="role-title">
+                Selecciona un curso y mira solo lo que importa para la clase.
+              </h1>
+              <p id="hero-copy" class="role-copy">
+                El profesor navega por cursos, permisos vigentes y novedades
+                aprobadas sin revisar tablas administrativas.
+              </p>
+              <div class="hero-command-strip" aria-hidden="true">
+                <span>Mapa de cursos</span>
+                <span>Excusas vigentes</span>
+                <span>Novedades</span>
+              </div>
+            </div>
+            <div class="hero-orbit teacher-orbit">
+              <div class="orbit-ring"></div>
+              <div id="hero-stats" class="hero-stats-stack"></div>
+            </div>
+          </div>
+        </section>
+        <section id="dashboard-root" class="experience-root mt-7"></section>
+      </main>
+    </div>
+    <script src="./js/dashboard.js"></script>
+  </body>
+</html>
