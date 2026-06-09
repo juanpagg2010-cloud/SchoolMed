@@ -3,7 +3,7 @@ services:
     name: schoolmed-api
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && npm run build:css
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
