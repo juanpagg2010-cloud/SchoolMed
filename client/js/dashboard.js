@@ -834,7 +834,7 @@ const showSessionTransition = ({ title, message, detail }) => {
   overlay.innerHTML = `
     <div class="session-transition__panel">
       <div class="session-transition__orb">
-        <span>SM</span>
+        <img src="./favicon.svg" alt="Logo SchoolMed" />
       </div>
       <p class="session-transition__kicker">${detail}</p>
       <h2>${title}</h2>

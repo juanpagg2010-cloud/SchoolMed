@@ -119,11 +119,15 @@
   }
 
   .brand-icon {
-    @apply flex h-11 w-11 items-center justify-center rounded-lg bg-cyan-300 text-sm font-black text-slate-950 shadow-lg shadow-cyan-950/40 transition duration-300;
+    @apply flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-white p-1 shadow-lg shadow-cyan-950/40 transition duration-300;
+  }
+
+  .brand-icon img {
+    @apply h-full w-full object-contain;
   }
 
   .brand-mark:hover .brand-icon {
-    @apply -translate-y-0.5 bg-white;
+    @apply -translate-y-0.5;
   }
 
   .top-nav {
@@ -236,7 +240,11 @@
   }
 
   .session-transition__orb {
-    @apply relative grid h-24 w-24 place-items-center rounded-full border border-cyan-200/30 bg-cyan-300/10 text-xl font-black text-white shadow-2xl shadow-cyan-950/40;
+    @apply relative grid h-24 w-24 place-items-center overflow-hidden rounded-full border border-cyan-200/30 bg-white p-2 shadow-2xl shadow-cyan-950/40;
+  }
+
+  .session-transition__orb img {
+    @apply h-full w-full object-contain;
   }
 
   .session-transition__orb::before,
