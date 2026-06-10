@@ -42,7 +42,11 @@ let emailDraft = null;
 let editingUserId = "";
 let flashMessage = null;
 let coordinatorExcusePage = 1;
+let coordinatorUserPage = 1;
 const coordinatorExcusesPerPage = 5;
+const coordinatorUsersPerPage = 5;
+let guardianExcusePage = 1;
+const guardianExcusesPerPage = 3;
 let teacherGradePage = 1;
 let teacherExcusePage = 1;
 const teacherGradesPerPage = 5;
@@ -807,13 +811,21 @@ function renderUsersList() {
     const matchesStatus = status === "all" || (status === "active" ? user.active : !user.active);
     return text.includes(search) && (role === "all" || user.role === role) && matchesStatus;
   });
+  const totalPages = Math.max(1, Math.ceil(rows.length / coordinatorUsersPerPage));
+  coordinatorUserPage = Math.min(Math.max(coordinatorUserPage, 1), totalPages);
+  const startIndex = (coordinatorUserPage - 1) * coordinatorUsersPerPage;
+  const pageRows = rows.slice(startIndex, startIndex + coordinatorUsersPerPage);
 
   list.innerHTML = `
+    <div class="flex flex-col gap-2 border-b border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-bold text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+      <span>${rows.length} usuarios encontrados</span>
+      <span class="text-xs uppercase tracking-[0.16em] text-slate-500">Pagina ${coordinatorUserPage} de ${totalPages}</span>
+    </div>
     <div class="hidden grid-cols-[1.1fr_0.8fr_0.6fr_0.7fr_1fr] gap-4 bg-white/[0.065] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500 xl:grid">
       <span>Usuario</span><span>Contacto</span><span>Rol</span><span>Estado</span><span>Acciones</span>
     </div>
     <div class="grid gap-2 p-2">
-      ${rows.map((user, index) => `
+      ${pageRows.map((user, index) => `
         <article class="stagger-item grid gap-4 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-4 transition duration-300 hover:-translate-y-0.5 hover:border-cyan-200/30 hover:bg-white/[0.07] xl:grid-cols-[1.1fr_0.8fr_0.6fr_0.7fr_1fr] xl:items-center" style="--i:${index}">
           <div>
             <p class="font-black text-white">${escapeHtml(user.name)}</p>
@@ -832,6 +844,15 @@ function renderUsersList() {
           </div>
         </article>
       `).join("") || `<p class="px-4 py-8 text-sm font-bold text-slate-400">No hay usuarios con esos filtros.</p>`}
+    </div>
+    <div class="border-t border-white/10 bg-white/[0.025] px-4 py-3">
+      ${paginationControls({
+        currentPage: coordinatorUserPage,
+        label: "Usuarios",
+        prefix: "coord-user",
+        totalItems: rows.length,
+        totalPages,
+      })}
     </div>
   `;
 }
@@ -1108,14 +1129,34 @@ function bindCoordinator() {
     render();
   });
 
-  document.querySelector("#user-search").addEventListener("input", renderUsersList);
-  document.querySelector("#user-role-filter").addEventListener("change", renderUsersList);
-  document.querySelector("#user-status-filter").addEventListener("change", renderUsersList);
+  document.querySelector("#user-search").addEventListener("input", () => {
+    coordinatorUserPage = 1;
+    renderUsersList();
+  });
+  document.querySelector("#user-role-filter").addEventListener("change", () => {
+    coordinatorUserPage = 1;
+    renderUsersList();
+  });
+  document.querySelector("#user-status-filter").addEventListener("change", () => {
+    coordinatorUserPage = 1;
+    renderUsersList();
+  });
 
   document.querySelector("#users-list").addEventListener("click", async (event) => {
+    const userPage = event.target.closest("[data-coord-user-page]");
+    const userPrev = event.target.closest("[data-coord-user-prev]");
+    const userNext = event.target.closest("[data-coord-user-next]");
     const editId = event.target.closest("[data-edit-user]")?.dataset.editUser;
     const toggleId = event.target.closest("[data-toggle-user]")?.dataset.toggleUser;
     const deleteId = event.target.closest("[data-delete-user]")?.dataset.deleteUser;
+
+    if (userPage || userPrev || userNext) {
+      if (userPage) coordinatorUserPage = Number(userPage.dataset.coordUserPage);
+      if (userPrev) coordinatorUserPage -= 1;
+      if (userNext) coordinatorUserPage += 1;
+      renderUsersList();
+      return;
+    }
 
     if (editId) {
       const user = appState.users.find((item) => item.id === editId);
@@ -1369,6 +1410,10 @@ function renderGuardian() {
   const excuses = hasGuardianSession
     ? appState.excuses.filter((item) => item.email === email || item.guardian === name)
     : appState.excuses;
+  const guardianTotalPages = Math.max(1, Math.ceil(excuses.length / guardianExcusesPerPage));
+  guardianExcusePage = Math.min(Math.max(guardianExcusePage, 1), guardianTotalPages);
+  const guardianStartIndex = (guardianExcusePage - 1) * guardianExcusesPerPage;
+  const visibleGuardianExcuses = excuses.slice(guardianStartIndex, guardianStartIndex + guardianExcusesPerPage);
 
   renderStats([
     { value: excuses.length, label: "Enviadas" },
@@ -1446,7 +1491,7 @@ function renderGuardian() {
     <section id="guardian-track" class="stage-panel focus-zone animate-rise-delay">
         ${sectionHeader("Seguimiento de mis excusas", "Consulta si fueron aceptadas, rechazadas, siguen por revisar o continuan vigentes.")}
         <div class="grid gap-4">
-          ${excuses.map((excuse, index) => `
+          ${visibleGuardianExcuses.map((excuse, index) => `
             <article class="action-card stagger-item grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start" style="--i:${index}">
               <div>
                 <div class="flex flex-wrap items-center gap-3">
@@ -1474,6 +1519,13 @@ function renderGuardian() {
               </div>
             </article>
           `).join("") || `<p class="py-8 text-sm font-bold text-slate-400">Aun no has subido excusas medicas.</p>`}
+          ${paginationControls({
+            currentPage: guardianExcusePage,
+            label: "Excusas",
+            prefix: "guardian-excuse",
+            totalItems: excuses.length,
+            totalPages: guardianTotalPages,
+          })}
         </div>
     </section>
   `);
@@ -1523,6 +1575,7 @@ function renderGuardian() {
       await apiFormRequest("/medical-excuses", formData, { method: "POST" });
       alert("Excusa medica creada y enviada al coordinador para revision.");
       activeSectionByRole.Acudiente = "guardian-track";
+      guardianExcusePage = 1;
       await syncRemoteData({ force: true });
     } catch (error) {
       alert(`No se pudo enviar la excusa: ${error.message}`);
@@ -1532,6 +1585,18 @@ function renderGuardian() {
         submitButton.textContent = "Enviar excusa";
       }
     }
+  });
+  document.querySelector("#guardian-track").addEventListener("click", (event) => {
+    const excusePage = event.target.closest("[data-guardian-excuse-page]");
+    const excusePrev = event.target.closest("[data-guardian-excuse-prev]");
+    const excuseNext = event.target.closest("[data-guardian-excuse-next]");
+
+    if (!excusePage && !excusePrev && !excuseNext) return;
+
+    if (excusePage) guardianExcusePage = Number(excusePage.dataset.guardianExcusePage);
+    if (excusePrev) guardianExcusePage -= 1;
+    if (excuseNext) guardianExcusePage += 1;
+    renderGuardian();
   });
   renderQrCodes();
   bindCommandShell();
