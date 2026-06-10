@@ -47,6 +47,8 @@ const activeSectionByRole = {
 };
 const appState = loadState();
 const apiBaseUrl = "/api/v1";
+const syncedRoles = new Set();
+let isSyncingRemoteData = false;
 
 // Referencias a regiones dinamicas del dashboard.
 const root = document.querySelector("#dashboard-root");
@@ -145,6 +147,73 @@ async function apiRequest(path, options = {}) {
   }
 
   return data;
+}
+
+// Adapta una excusa de MongoDB al formato que usa el dashboard visual.
+function mapExcuseFromApi(excuse) {
+  const guardian = excuse.acudienteId || {};
+  const file = excuse.archivo || {};
+
+  return {
+    id: excuse._id || excuse.id,
+    student: excuse.nombreEstudiante || "",
+    document: excuse.documentoEstudiante || "",
+    guardian: guardian.name || currentUser.name || "Acudiente",
+    email: guardian.email || currentUser.email || "",
+    phone: guardian.phone || currentUser.phone || "",
+    grade: excuse.grado || "",
+    group: excuse.grupo || "",
+    reason: excuse.motivo || "Excusa medica",
+    description: excuse.descripcion || "Soporte medico adjunto.",
+    start: String(excuse.fechaInicio || "").slice(0, 10),
+    end: String(excuse.fechaFin || "").slice(0, 10),
+    status: excuse.estado || "PendienteRevision",
+    file: file.nombreOriginal || file.nombreArchivo || "Sin archivo",
+  };
+}
+
+// Inserta o actualiza excusas remotas sin duplicarlas en localStorage.
+function upsertRemoteExcuses(excuses = []) {
+  const mapped = excuses.map(mapExcuseFromApi).filter((excuse) => excuse.id);
+
+  mapped.forEach((remoteExcuse) => {
+    const index = appState.excuses.findIndex((item) => item.id === remoteExcuse.id);
+
+    if (index >= 0) {
+      appState.excuses[index] = { ...appState.excuses[index], ...remoteExcuse };
+      return;
+    }
+
+    appState.excuses.unshift(remoteExcuse);
+  });
+
+  saveState();
+}
+
+// Carga excusas reales desde la API segun el rol activo.
+async function syncRemoteExcuses(role) {
+  if (!sessionToken || syncedRoles.has(role) || isSyncingRemoteData) return;
+
+  const pathsByRole = {
+    Acudiente: "/medical-excuses/me",
+    Coordinador: "/medical-excuses/review",
+    Profesor: "/medical-excuses/classroom",
+  };
+  const path = pathsByRole[role];
+  if (!path) return;
+
+  isSyncingRemoteData = true;
+
+  try {
+    const data = await apiRequest(path);
+    upsertRemoteExcuses(data.excusas || []);
+    syncedRoles.add(role);
+    render();
+  } catch (error) {
+    console.warn(`No se pudieron sincronizar excusas de ${role}: ${error.message}`);
+  } finally {
+    isSyncingRemoteData = false;
+  }
 }
 
 // Renderiza la etiqueta visual de estado de una excusa.
@@ -610,10 +679,40 @@ function bindCoordinator() {
     if (!id) return;
 
     const excuse = appState.excuses.find((item) => item.id === id);
-    excuse.status = approveId ? "Aprobada" : "Rechazada";
-    appState.feed.unshift(`${excuse.student} fue ${approveId ? "aceptada" : "rechazada"} por coordinacion.`);
-    saveState();
-    render();
+    if (!excuse) return;
+
+    const reviewExcuse = async () => {
+      try {
+        if (approveId) {
+          const data = await apiRequest(`/medical-excuses/${id}/approve`, { method: "PATCH" });
+          excuse.status = "Aprobada";
+          const sent = data.excusa?.emailNotification?.sent;
+          appState.feed.unshift(`${excuse.student} fue aceptada por coordinacion.${sent ? " Se notifico al acudiente por correo." : " No se pudo confirmar el envio del correo."}`);
+        } else {
+          const motivoRechazo = prompt("Escribe el motivo del rechazo");
+
+          if (!motivoRechazo?.trim()) {
+            alert("Debes escribir el motivo del rechazo.");
+            return;
+          }
+
+          const data = await apiRequest(`/medical-excuses/${id}/reject`, {
+            method: "PATCH",
+            body: JSON.stringify({ motivoRechazo: motivoRechazo.trim() }),
+          });
+          excuse.status = "Rechazada";
+          const sent = data.excusa?.emailNotification?.sent;
+          appState.feed.unshift(`${excuse.student} fue rechazada por coordinacion.${sent ? " Se notifico al acudiente por correo." : " No se pudo confirmar el envio del correo."}`);
+        }
+
+        saveState();
+        render();
+      } catch (error) {
+        alert(`No se pudo actualizar la excusa: ${error.message}`);
+      }
+    };
+
+    reviewExcuse();
   });
 
   document.querySelector("#email-form").addEventListener("submit", (event) => {
@@ -737,7 +836,7 @@ function renderGuardian() {
     </section>
   `);
 
-  document.querySelector("#guardian-form").addEventListener("submit", (event) => {
+  document.querySelector("#guardian-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const get = (id) => document.querySelector(`#${id}`).value.trim();
     const file = document.querySelector("#file").files[0]?.name || "Soporte pendiente";
@@ -746,25 +845,39 @@ function renderGuardian() {
     const guardianPhone = hasGuardianSession ? (sessionUser.phone || get("guardian-phone")) : get("guardian-phone");
     if (!guardianName || !guardianEmail || !get("student") || !get("grade") || !get("start") || !get("end")) return;
 
-    appState.excuses.unshift({
-      id: crypto.randomUUID(),
-      student: get("student"),
-      document: get("document"),
-      guardian: guardianName,
-      email: guardianEmail,
-      phone: guardianPhone,
-      grade: get("grade"),
-      group: get("group").toUpperCase(),
-      reason: get("reason") || "Excusa medica",
-      description: get("description") || "Soporte medico adjunto.",
-      start: get("start"),
-      end: get("end"),
-      status: "PendienteRevision",
-      file,
-    });
-    appState.feed.unshift(`${guardianName} envio una excusa para ${get("student")}.`);
-    saveState();
-    render();
+    try {
+      const created = await apiRequest("/medical-excuses", {
+        method: "POST",
+        body: JSON.stringify({
+          nombreEstudiante: get("student"),
+          documentoEstudiante: get("document"),
+          grado: get("grade"),
+          grupo: get("group").toUpperCase(),
+          motivo: get("reason") || "Excusa medica",
+          descripcion: get("description") || "Soporte medico adjunto.",
+          fechaInicio: get("start"),
+          fechaFin: get("end"),
+        }),
+      });
+
+      let excuse = created.excusa;
+      const code = prompt("Te enviamos un codigo al correo. Escribelo para enviar la excusa a revision.");
+
+      if (code?.trim()) {
+        const verified = await apiRequest(`/medical-excuses/${excuse._id || excuse.id}/verify-code`, {
+          method: "POST",
+          body: JSON.stringify({ codigo: code.trim() }),
+        });
+        excuse = verified.excusa;
+      }
+
+      upsertRemoteExcuses([excuse]);
+      appState.feed.unshift(`${guardianName} envio una excusa para ${get("student")}.`);
+      saveState();
+      render();
+    } catch (error) {
+      alert(`No se pudo enviar la excusa: ${error.message}`);
+    }
   });
   bindCommandShell();
 }
@@ -880,6 +993,7 @@ function renderTeacher() {
 
 // Decide que vista renderizar segun el rol activo.
 function render() {
+  syncRemoteExcuses(activeRole);
   renderTabs();
   setShell();
 

@@ -238,9 +238,12 @@ export const reviewMedicalExcuse = async (id, coordinatorId, review) => {
     throw error;
   }
 
-  await notifyGuardianReviewResult(excusa);
+  const emailNotification = await notifyGuardianReviewResult(excusa);
 
-  return excusa;
+  return {
+    ...excusa.toObject(),
+    emailNotification,
+  };
 };
 
 // Valida el codigo enviado al correo y mueve la excusa a PendienteRevision.
