@@ -1,5 +1,6 @@
 const API_BASE_URL = "/api/auth";
 
+// Referencias al formulario de autenticacion y sus piezas visuales.
 const form = document.querySelector("#auth-form");
 const messageBox = document.querySelector("#auth-message");
 const submitButton = document.querySelector("#submit-button");
@@ -13,6 +14,7 @@ const passwordInput = document.querySelector("#password");
 
 let currentMode = "login";
 
+// Textos y comportamiento que cambian entre iniciar sesion y registrarse.
 const modeContent = {
   login: {
     kicker: "Bienvenido",
@@ -35,6 +37,7 @@ const modeContent = {
   },
 };
 
+// Muestra mensajes de error, exito o informacion dentro del formulario.
 const showMessage = (text, type = "info") => {
   const styles = {
     error: "border-red-300/30 bg-red-400/10 text-red-100",
@@ -46,12 +49,14 @@ const showMessage = (text, type = "info") => {
   messageBox.textContent = text;
 };
 
+// Oculta el mensaje actual del formulario.
 const hideMessage = () => {
   messageBox.className =
     "hidden rounded-2xl border px-4 py-3 text-sm font-semibold";
   messageBox.textContent = "";
 };
 
+// Bloquea el boton mientras se procesa una peticion para evitar dobles envios.
 const setLoading = (isLoading) => {
   submitButton.disabled = isLoading;
   submitButton.textContent = isLoading
@@ -61,6 +66,7 @@ const setLoading = (isLoading) => {
     : modeContent[currentMode].button;
 };
 
+// Cambia visualmente el formulario entre modo login y modo registro.
 const setMode = (mode) => {
   currentMode = mode;
   const content = modeContent[mode];
@@ -90,6 +96,7 @@ const setMode = (mode) => {
   hideMessage();
 };
 
+// Lee los campos visibles del formulario y arma el payload para la API.
 const getFormData = () => {
   const data = new FormData(form);
   const payload = {
@@ -106,6 +113,7 @@ const getFormData = () => {
   return payload;
 };
 
+// Valida campos minimos antes de enviar la peticion al backend.
 const validatePayload = (payload) => {
   if (!payload.email || !payload.password) {
     return "El correo y la contrasena son obligatorios.";
@@ -122,11 +130,13 @@ const validatePayload = (payload) => {
   return "";
 };
 
+// Guarda token y usuario para mantener la sesion en el panel.
 const saveSession = ({ token, user }) => {
   localStorage.setItem("schoolmed_token", token);
   localStorage.setItem("schoolmed_user", JSON.stringify(user));
 };
 
+// Crea una transicion visual antes de entrar al dashboard.
 const showSessionTransition = ({ title, message, detail }) => {
   const overlay = document.createElement("div");
   overlay.className = "session-transition";
@@ -150,6 +160,7 @@ const showSessionTransition = ({ title, message, detail }) => {
   });
 };
 
+// Envia al usuario al dashboard correspondiente segun su rol.
 const redirectToDashboard = (user) => {
   const dashboards = {
     Coordinador: "./coordinador-dashboard.html",
@@ -160,6 +171,7 @@ const redirectToDashboard = (user) => {
   window.location.href = dashboards[user?.role] || "./padre-dashboard.html";
 };
 
+// Ejecuta login o registro contra la API.
 const submitAuth = async (payload) => {
   const endpoint = currentMode === "login" ? "login" : "register";
   const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
@@ -179,6 +191,7 @@ const submitAuth = async (payload) => {
   return data;
 };
 
+// Maneja el envio del formulario completo: valida, autentica, guarda sesion y redirige.
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   hideMessage();
@@ -215,10 +228,12 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+// Tabs superiores para alternar entre login y registro.
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => setMode(tab.dataset.mode));
 });
 
+// Boton de ayuda inferior para cambiar de modo desde el texto.
 modeHelper.addEventListener("click", (event) => {
   const switchButton = event.target.closest("[data-switch-mode]");
   if (switchButton) {
@@ -226,4 +241,5 @@ modeHelper.addEventListener("click", (event) => {
   }
 });
 
+// Estado inicial de la pantalla de acceso.
 setMode("login");

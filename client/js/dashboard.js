@@ -1,7 +1,10 @@
 const stateKey = "schoolmed_dashboard_state_v2";
+
+// Datos de sesion guardados despues del login.
 const sessionUser = JSON.parse(localStorage.getItem("schoolmed_user") || "null");
 const sessionToken = localStorage.getItem("schoolmed_token");
 
+// Metadatos visuales y textos principales para cada rol.
 const roleMeta = {
   Coordinador: {
     name: "Coordinador",
@@ -26,12 +29,14 @@ const roleMeta = {
   },
 };
 
+// Usuario actual usado para personalizar el panel.
 const currentUser = sessionUser || {
   name: "",
   email: "",
   role: "Coordinador",
 };
 
+// Algunos dashboards fijan el rol desde el HTML; si no, se usa el rol de sesion.
 const fixedRole = document.body.dataset.dashboardRole || "";
 let activeRole = fixedRole || currentUser.role || "Coordinador";
 let selectedGradeId = "";
@@ -41,7 +46,9 @@ const activeSectionByRole = {
   Profesor: "teacher-map",
 };
 const appState = loadState();
+const apiBaseUrl = "/api/v1";
 
+// Referencias a regiones dinamicas del dashboard.
 const root = document.querySelector("#dashboard-root");
 const roleTabs = document.querySelector("#role-tabs");
 const userName = document.querySelector("#user-name");
@@ -52,6 +59,7 @@ const heroTitle = document.querySelector("#hero-title");
 const heroCopy = document.querySelector("#hero-copy");
 const heroStats = document.querySelector("#hero-stats");
 
+// Traducciones de estados del backend a etiquetas legibles.
 const statusLabels = {
   Aprobada: "Aceptada",
   Rechazada: "Rechazada",
@@ -59,6 +67,7 @@ const statusLabels = {
   PendienteVerificacion: "Por verificar",
 };
 
+// Estilos de cada estado de excusa.
 const statusClasses = {
   Aprobada: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
   Rechazada: "border-red-400/30 bg-red-400/10 text-red-200",
@@ -66,6 +75,7 @@ const statusClasses = {
   PendienteVerificacion: "border-sky-300/30 bg-sky-300/10 text-sky-100",
 };
 
+// Puntos de color dentro de cada badge de estado.
 const statusDots = {
   Aprobada: "bg-emerald-300 shadow-emerald-300/40",
   Rechazada: "bg-red-300 shadow-red-300/40",
@@ -73,12 +83,14 @@ const statusDots = {
   PendienteVerificacion: "bg-sky-200 shadow-sky-200/40",
 };
 
+// Gradientes de acento por rol.
 const roleAccent = {
   Coordinador: "from-cyan-300 via-emerald-200 to-white",
   Acudiente: "from-emerald-200 via-cyan-200 to-white",
   Profesor: "from-sky-200 via-cyan-200 to-emerald-100",
 };
 
+// Carga estado local usado por el dashboard demostrativo.
 function loadState() {
   const saved = JSON.parse(localStorage.getItem(stateKey) || "null");
   if (saved) return saved;
@@ -91,10 +103,12 @@ function loadState() {
   };
 }
 
+// Persiste cambios del dashboard demostrativo en localStorage.
 function saveState() {
   localStorage.setItem(stateKey, JSON.stringify(appState));
 }
 
+// Escapa texto antes de insertarlo en HTML para evitar inyecciones.
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -105,6 +119,7 @@ function escapeHtml(value = "") {
   })[char]);
 }
 
+// Genera un campo de formulario con estilos consistentes.
 function field(label, id, type = "text", placeholder = "") {
   return `
     <label class="grid gap-2 text-sm font-bold text-slate-300">${label}
@@ -113,6 +128,26 @@ function field(label, id, type = "text", placeholder = "") {
   `;
 }
 
+// Helper para consumir la API autenticada desde el dashboard.
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.message || "No se pudo completar la solicitud.");
+  }
+
+  return data;
+}
+
+// Renderiza la etiqueta visual de estado de una excusa.
 function statusBadge(status) {
   return `
     <span class="status-pill ${statusClasses[status] || "border-white/10 bg-white/10 text-slate-200"}">
@@ -122,11 +157,13 @@ function statusBadge(status) {
   `;
 }
 
+// Determina si una excusa aprobada sigue vigente para el docente.
 function isActiveExcuse(excuse) {
   const end = new Date(`${excuse.end}T23:59:59`);
   return excuse.status === "Aprobada" && end >= new Date();
 }
 
+// Encabezado reutilizable para secciones internas del dashboard.
 function sectionHeader(title, copy = "") {
   return `
     <div class="mb-5 flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
@@ -139,15 +176,18 @@ function sectionHeader(title, copy = "") {
   `;
 }
 
+// Calcula porcentajes seguros evitando division por cero.
 function percent(value, total) {
   if (!total) return 0;
   return Math.round((value / total) * 100);
 }
 
+// Formatea el rango de fechas de una excusa.
 function dateRange(excuse) {
   return `${escapeHtml(excuse.start)} a ${escapeHtml(excuse.end)}`;
 }
 
+// Grafica mini barras para indicadores rapidos.
 function renderMiniChart(values) {
   const max = Math.max(...values, 1);
   return `
@@ -162,6 +202,7 @@ function renderMiniChart(values) {
   `;
 }
 
+// Construye tarjetas de senales/indicadores para el hero segun el rol activo.
 function renderHeroSignal() {
   const pending = appState.excuses.filter((item) => item.status === "PendienteRevision").length;
   const approved = appState.excuses.filter((item) => item.status === "Aprobada").length;
@@ -185,10 +226,12 @@ function renderHeroSignal() {
   `;
 }
 
+// Estado vacio reutilizable para listas sin informacion.
 function emptyState(message) {
   return `<p class="rounded-lg border border-white/10 bg-white/[0.035] px-4 py-8 text-sm font-bold text-slate-400">${message}</p>`;
 }
 
+// Crea un boton lateral de navegacion interna del dashboard.
 function commandTile(action) {
   const isActive = action.target === activeSectionByRole[activeRole];
   return `
@@ -203,6 +246,7 @@ function commandTile(action) {
   `;
 }
 
+// Estructura comun de navegacion lateral/movil mas contenido principal.
 function commandShell(actions, content) {
   return `
     <div class="mb-5 mobile-command soft-scrollbar">
@@ -218,6 +262,7 @@ function commandShell(actions, content) {
   `;
 }
 
+// Enlaza botones de navegacion con las secciones visibles del dashboard.
 function bindCommandShell() {
   const buttons = document.querySelectorAll("[data-jump]");
   const zones = document.querySelectorAll(".focus-zone");
@@ -255,6 +300,7 @@ function bindCommandShell() {
   });
 }
 
+// Renderiza tabs de rol cuando el dashboard permite cambiar entre vistas.
 function renderTabs() {
   if (!roleTabs) return;
 
@@ -274,6 +320,7 @@ function renderTabs() {
   `).join("");
 }
 
+// Actualiza textos, identidad visual y datos del usuario en el encabezado.
 function setShell() {
   const meta = roleMeta[activeRole];
   const useSessionIdentity = sessionUser?.role === activeRole;
@@ -286,6 +333,7 @@ function setShell() {
   heroCopy.textContent = meta.copy;
 }
 
+// Renderiza metricas resumidas dentro del hero del rol.
 function renderStats(items) {
   heroStats.innerHTML = items.map((item) => `
     <div class="metric-card">
@@ -295,6 +343,7 @@ function renderStats(items) {
   `).join("") + renderHeroSignal();
 }
 
+// Vista del coordinador: revision, usuarios, grados y comunicacion.
 function renderCoordinator() {
   renderStats([
     { value: appState.users.length, label: "Usuarios" },
@@ -352,6 +401,7 @@ function renderCoordinator() {
           ${field("Nombre completo", "user-name-input", "text", "Ej: Ana Torres")}
           ${field("Correo", "user-email-input", "email", "correo@dominio.com")}
           ${field("Telefono", "user-phone-input", "tel", "Telefono de contacto")}
+          ${field("Contrasena inicial", "user-password-input", "password", "Minimo 6 caracteres")}
           <label class="grid gap-2 text-sm font-bold text-slate-300">Rol
             <select id="user-role-input" class="field">
               <option>Profesor</option>
@@ -407,6 +457,7 @@ function renderCoordinator() {
   bindCommandShell();
 }
 
+// Lista local de grados administrados desde el panel.
 function renderGradesList() {
   const list = document.querySelector("#grades-list");
   if (!list) return;
@@ -425,6 +476,7 @@ function renderGradesList() {
   `).join("") || emptyState("Aun no hay grados creados.");
 }
 
+// Tabla filtrable de excusas para revision del coordinador.
 function renderCoordinatorExcuses() {
   const table = document.querySelector("#excuse-table");
   const search = document.querySelector("#excuse-search")?.value.toLowerCase() || "";
@@ -462,19 +514,42 @@ function renderCoordinatorExcuses() {
   `;
 }
 
+// Eventos del coordinador: crear usuarios, grados, filtros y decisiones de excusas.
 function bindCoordinator() {
-  document.querySelector("#user-form").addEventListener("submit", (event) => {
+  document.querySelector("#user-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = document.querySelector("#user-name-input").value.trim();
     const email = document.querySelector("#user-email-input").value.trim();
     const phone = document.querySelector("#user-phone-input").value.trim();
+    const password = document.querySelector("#user-password-input").value;
     const role = document.querySelector("#user-role-input").value;
-    if (!name || !email || !phone) return;
+    if (!name || !email || !phone || !password) return;
 
-    appState.users.unshift({ id: crypto.randomUUID(), name, email, phone, role, active: true });
-    appState.feed.unshift(`${name} fue creado como ${role}.`);
-    saveState();
-    render();
+    if (password.length < 6) {
+      alert("La contrasena debe tener minimo 6 caracteres.");
+      return;
+    }
+
+    try {
+      const { user } = await apiRequest("/users", {
+        method: "POST",
+        body: JSON.stringify({ name, email, phone, password, role }),
+      });
+
+      appState.users.unshift({
+        id: user._id || user.id || crypto.randomUUID(),
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        active: user.isActive,
+      });
+      appState.feed.unshift(`${user.name} fue creado como ${user.role}.`);
+      saveState();
+      render();
+    } catch (error) {
+      alert(error.message);
+    }
   });
 
   document.querySelector("#add-grade").addEventListener("click", () => {
@@ -551,6 +626,7 @@ function bindCoordinator() {
   });
 }
 
+// Vista del acudiente para crear excusas y revisar su seguimiento.
 function renderGuardian() {
   const hasGuardianSession = sessionUser?.role === "Acudiente";
   const email = hasGuardianSession ? sessionUser.email : "";
@@ -693,6 +769,7 @@ function renderGuardian() {
   bindCommandShell();
 }
 
+// Vista del profesor para consultar excusas aprobadas por grado.
 function renderTeacher() {
   const activeExcuses = appState.excuses.filter(isActiveExcuse);
   const selectedGrade = appState.grades.find((grade) => grade.id === selectedGradeId) || appState.grades[0] || null;
@@ -801,6 +878,7 @@ function renderTeacher() {
   bindCommandShell();
 }
 
+// Decide que vista renderizar segun el rol activo.
 function render() {
   renderTabs();
   setShell();
@@ -818,6 +896,7 @@ function render() {
   renderCoordinator();
 }
 
+// Cambio manual de rol en dashboards que muestran varias perspectivas.
 roleTabs?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-role-tab]");
   if (!button) return;
@@ -828,6 +907,7 @@ roleTabs?.addEventListener("click", (event) => {
 document.querySelector("#logout-button").addEventListener("click", logout);
 document.querySelector("#logout-button-desktop").addEventListener("click", logout);
 
+// Transicion visual antes de cerrar sesion.
 const showSessionTransition = ({ title, message, detail }) => {
   const overlay = document.createElement("div");
   overlay.className = "session-transition session-transition--exit";
@@ -851,6 +931,7 @@ const showSessionTransition = ({ title, message, detail }) => {
   });
 };
 
+// Limpia la sesion local y regresa al login.
 async function logout() {
   await showSessionTransition({
     title: "Sesion cerrada",
@@ -862,4 +943,5 @@ async function logout() {
   window.location.href = "./index.html";
 }
 
+// Primer render del dashboard.
 render();

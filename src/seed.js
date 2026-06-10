@@ -1,11 +1,13 @@
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import { pathToFileURL } from "node:url";
 import connectDB from "./config/db.js";
 import User from "./models/userModel.js";
 
 dotenv.config();
 
+// Usuario coordinador inicial para administrar el sistema despues del despliegue.
 const adminUser = {
   name: "Administrador SchoolMed",
   email: "juanpagg2010@gmail.com",
@@ -15,6 +17,7 @@ const adminUser = {
   isActive: true,
 };
 
+// Crea o actualiza el admin sin duplicarlo; la contrasena siempre queda hasheada.
 const seedAdmin = async () => {
   try {
     await connectDB();
@@ -48,4 +51,9 @@ const seedAdmin = async () => {
   }
 };
 
-seedAdmin();
+// Ejecuta el seed solo cuando el archivo se corre directamente con npm run seed.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  seedAdmin();
+}
+
+export default seedAdmin;

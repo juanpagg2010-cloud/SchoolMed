@@ -1,5 +1,48 @@
+import bcrypt from "bcrypt";
 import User from "../models/userModel.js";
 import { VALID_ROLES } from "./authService.js";
+
+const removePassword = (user) => {
+  const userData = user.toObject();
+  delete userData.password;
+  return userData;
+};
+
+// Crea usuarios desde el panel de coordinacion con contrasena inicial definida por el admin.
+export const createUserByAdmin = async ({ name, email, password, role, phone }) => {
+  if (!name || !email || !password || !role || !phone) {
+    const error = new Error("Nombre, correo, contrasena, rol y telefono son obligatorios.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!VALID_ROLES.includes(role)) {
+    const error = new Error("Rol invalido. Usa Coordinador, Profesor o Acudiente.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const userExists = await User.findOne({
+    $or: [{ email: email.toLowerCase() }, { phone }],
+  });
+
+  if (userExists) {
+    const error = new Error("Ya existe un usuario con ese correo o telefono.");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const encryptedPassword = await bcrypt.hash(password, 10);
+  const user = await User.create({
+    name,
+    email,
+    password: encryptedPassword,
+    role,
+    phone,
+  });
+
+  return removePassword(user);
+};
 
 // Lista usuarios con filtros opcionales por rol y estado.
 export const getAllUsers = async ({ role, isActive } = {}) => {
@@ -50,6 +93,7 @@ export const updateUserById = async (id, payload) => {
 };
 
 export default {
+  createUserByAdmin,
   getAllUsers,
   updateUserById,
 };

@@ -10,6 +10,19 @@ const COORDINATOR = "Coordinador";
 router.use(protect);
 router.use(authorizeRoles(COORDINATOR));
 
+// Ruta para crear usuarios desde coordinacion. El admin define la contrasena inicial.
+router.post("/", async (req, res) => {
+  try {
+    const user = await userService.createUserByAdmin(req.body);
+    res.status(201).json({ ok: true, user });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      ok: false,
+      message: err.message || "No se pudo crear el usuario.",
+    });
+  }
+});
+
 // Ruta para listar usuarios. Solo coordinadores.
 router.get("/", async (req, res) => {
   try {
