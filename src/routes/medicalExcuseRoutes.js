@@ -192,6 +192,8 @@ router.patch("/:id/approve", authorizeRoles(COORDINATOR), validateObjectId("id")
 
     res.status(200).json({
       ok: true,
+      emailNotification: excusa.emailNotification,
+      emailSent: Boolean(excusa.emailNotification?.sent),
       message: "Excusa medica aprobada.",
       excusa,
     });
@@ -220,6 +222,8 @@ router.patch("/:id/reject", authorizeRoles(COORDINATOR), validateObjectId("id"),
 
     return res.status(200).json({
       ok: true,
+      emailNotification: excusa.emailNotification,
+      emailSent: Boolean(excusa.emailNotification?.sent),
       message: "Excusa medica rechazada.",
       excusa,
     });

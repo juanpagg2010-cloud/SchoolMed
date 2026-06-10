@@ -1,4 +1,5 @@
 import MedicalExcuse from "../models/medicalExcuse.js";
+import User from "../models/userModel.js";
 import { createActivity } from "./activityService.js";
 import { sendMedicalExcuseReviewResult } from "./emailService.js";
 
@@ -29,7 +30,12 @@ const notifyGuardianReviewResult = async (excusa) => {
     return { sent: false, reason: "Estado no notificable" };
   }
 
-  const guardianEmail = excusa.acudienteId?.email;
+  let guardianEmail = excusa.acudienteId?.email;
+
+  if (!guardianEmail && excusa.acudienteId) {
+    const guardian = await User.findById(excusa.acudienteId).select("email");
+    guardianEmail = guardian?.email;
+  }
 
   if (!guardianEmail) {
     return { sent: false, reason: "Acudiente sin correo" };

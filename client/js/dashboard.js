@@ -748,8 +748,11 @@ function bindCoordinator() {
         if (approveId) {
           const data = await apiRequest(`/medical-excuses/${id}/approve`, { method: "PATCH" });
           excuse.status = "Aprobada";
-          const sent = data.excusa?.emailNotification?.sent;
-          alert(sent ? "Excusa aprobada y correo enviado." : "Excusa aprobada, pero no se pudo confirmar el correo.");
+          const notification = data.emailNotification || data.excusa?.emailNotification || {};
+          const sent = data.emailSent || notification.sent;
+          alert(sent
+            ? "Excusa aprobada y correo enviado."
+            : `Excusa aprobada, pero no se envio el correo: ${notification.reason || "revisa la configuracion de Brevo."}`);
         } else {
           const motivoRechazo = prompt("Escribe el motivo del rechazo");
 
@@ -763,8 +766,11 @@ function bindCoordinator() {
             body: JSON.stringify({ motivoRechazo: motivoRechazo.trim() }),
           });
           excuse.status = "Rechazada";
-          const sent = data.excusa?.emailNotification?.sent;
-          alert(sent ? "Excusa rechazada y correo enviado." : "Excusa rechazada, pero no se pudo confirmar el correo.");
+          const notification = data.emailNotification || data.excusa?.emailNotification || {};
+          const sent = data.emailSent || notification.sent;
+          alert(sent
+            ? "Excusa rechazada y correo enviado."
+            : `Excusa rechazada, pero no se envio el correo: ${notification.reason || "revisa la configuracion de Brevo."}`);
         }
 
         await syncRemoteData({ force: true });
