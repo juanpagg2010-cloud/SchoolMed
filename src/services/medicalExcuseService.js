@@ -125,11 +125,21 @@ export const createMedicalExcuse = async (userId, userEmail, payload, file) => {
     verificacion: await buildVerification(code),
   });
 
-  const emailResult = await sendMedicalExcuseVerificationCode({
-    code,
-    email: userEmail,
-    studentName: nombreEstudiante,
-  });
+  let emailResult;
+
+  try {
+    emailResult = await sendMedicalExcuseVerificationCode({
+      code,
+      email: userEmail,
+      studentName: nombreEstudiante,
+    });
+  } catch (error) {
+    await MedicalExcuse.findByIdAndDelete(excusa._id);
+
+    const emailError = new Error(`No se pudo enviar el codigo por correo: ${error.message}`);
+    emailError.statusCode = 502;
+    throw emailError;
+  }
 
   const publicExcuse = await MedicalExcuse.findById(excusa._id);
 

@@ -30,6 +30,24 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Muestra la IP publica de salida del servidor para autorizar SMTP en Brevo.
+app.get("/api/server-ip", async (req, res) => {
+  try {
+    const response = await fetch("https://api.ipify.org?format=json");
+    const data = await response.json();
+
+    res.json({
+      ok: true,
+      ip: data.ip,
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: "No se pudo consultar la IP publica del servidor.",
+    });
+  }
+});
+
 app.get("/favicon.ico", (req, res) => {
   res.sendFile(join(clientPath, "assets", "favicon.jfif"));
 });
