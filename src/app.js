@@ -48,6 +48,22 @@ app.get("/api/server-ip", async (req, res) => {
   }
 });
 
+// Diagnostico publico y seguro del proveedor de correo configurado.
+app.get("/api/email-provider", (req, res) => {
+  const host = process.env.SMTP_HOST || "";
+  const isBrevo = host.includes("sendinblue.com") || host.includes("brevo.com");
+
+  res.json({
+    ok: true,
+    provider: isBrevo ? "Brevo" : "No identificado",
+    smtpHost: host || null,
+    smtpPort: process.env.SMTP_PORT || null,
+    smtpUserConfigured: Boolean(process.env.SMTP_USER),
+    smtpPasswordConfigured: Boolean(process.env.SMTP_PASS),
+    mailFrom: process.env.MAIL_FROM || null,
+  });
+});
+
 app.get("/favicon.ico", (req, res) => {
   res.sendFile(join(clientPath, "assets", "favicon.jfif"));
 });
