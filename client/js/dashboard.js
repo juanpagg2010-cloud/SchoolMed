@@ -39,6 +39,7 @@ const fixedRole = document.body.dataset.dashboardRole || "";
 let activeRole = fixedRole || currentUser.role || "Coordinador";
 let selectedGradeId = "";
 let emailDraft = null;
+let editingUserId = "";
 let flashMessage = null;
 let coordinatorExcusePage = 1;
 const coordinatorExcusesPerPage = 5;
@@ -546,6 +547,7 @@ function renderStats(items) {
 function renderCoordinator() {
   const totalExcuses = appState.excuses.length;
   const pendingExcuses = appState.excuses.filter((item) => item.status === "PendienteRevision").length;
+  const editingUser = appState.users.find((user) => user.id === editingUserId) || null;
 
   renderStats([
     { value: appState.users.length, label: "Usuarios" },
@@ -557,8 +559,10 @@ function renderCoordinator() {
     { code: "01", target: "coord-radar", title: "Radar institucional", copy: "Indicadores para presentar." },
     { code: "02", target: "coord-review", title: "Revisar excusas", copy: "Filtrar, aceptar, rechazar y contactar." },
     { code: "03", target: "coord-validate", title: "Validar QR", copy: "Escanear o buscar codigo aprobado." },
-    { code: "04", target: "coord-manage", title: "Administrar usuarios", copy: "Crear, editar, deshabilitar o eliminar cuentas." },
-    { code: "05", target: "coord-message", title: "Comunicar familias", copy: "Preparar correo y ver movimientos." },
+    { code: "04", target: "coord-users", title: "Usuarios registrados", copy: "Ver, filtrar y administrar cuentas." },
+    { code: "05", target: "coord-user-form", title: "Crear usuario", copy: "Formulario dedicado para alta o edicion." },
+    { code: "06", target: "coord-grades", title: "Grados", copy: "Organizacion academica aparte." },
+    { code: "07", target: "coord-message", title: "Comunicar familias", copy: "Preparar correo y ver movimientos." },
   ], `
     ${renderFlashMessage()}
     <section id="coord-radar" class="stage-panel focus-zone animate-rise">
@@ -621,81 +625,86 @@ function renderCoordinator() {
       </div>
     </section>
 
-    <section id="coord-manage" class="stage-panel focus-zone">
-      ${sectionHeader("Administracion de usuarios", "Gestiona todas las cuentas registradas, su estado y sus datos principales.")}
-      <div class="grid gap-6 xl:grid-cols-[360px_1fr]">
-        <form id="user-form" class="section-panel grid gap-4">
-          <input id="user-id-input" type="hidden" />
-          <div>
-            <p id="user-form-kicker" class="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Nueva cuenta</p>
-            <h3 id="user-form-title" class="mt-1 text-xl font-black text-white">Crear usuario</h3>
-          </div>
-          ${field("Nombre completo", "user-name-input", "text", "Ej: Ana Torres")}
-          ${field("Correo", "user-email-input", "email", "correo@dominio.com")}
-          ${field("Telefono", "user-phone-input", "tel", "Telefono de contacto")}
-          <label class="grid gap-2 text-sm font-bold text-slate-300" id="user-password-label">Contrasena inicial
-            <input id="user-password-input" type="password" class="field" placeholder="Minimo 6 caracteres" />
-          </label>
-          <label class="grid gap-2 text-sm font-bold text-slate-300">Rol
-            <select id="user-role-input" class="field">
-              <option>Profesor</option>
-              <option>Acudiente</option>
-              <option>Coordinador</option>
-            </select>
-          </label>
-          <label class="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.045] px-4 py-3 text-sm font-bold text-slate-300">
-            <span>Cuenta activa</span>
-            <input id="user-active-input" type="checkbox" class="h-5 w-5 accent-cyan-300" checked />
-          </label>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <button id="user-submit-button" class="primary-action" type="submit">Crear usuario</button>
-            <button id="user-cancel-edit" class="secondary-action" type="button">Limpiar</button>
-          </div>
-        </form>
-
-        <div class="grid gap-5">
-          <div class="grid gap-3 sm:grid-cols-3">
-            <div class="rounded-lg border border-emerald-300/15 bg-emerald-300/10 p-4">
-              <p class="text-2xl font-black text-white">${appState.users.filter((user) => user.active).length}</p>
-              <p class="text-xs font-black uppercase tracking-[0.16em] text-emerald-100">Activos</p>
-            </div>
-            <div class="rounded-lg border border-amber-300/15 bg-amber-300/10 p-4">
-              <p class="text-2xl font-black text-white">${appState.users.filter((user) => !user.active).length}</p>
-              <p class="text-xs font-black uppercase tracking-[0.16em] text-amber-100">Deshabilitados</p>
-            </div>
-            <div class="rounded-lg border border-cyan-300/15 bg-cyan-300/10 p-4">
-              <p class="text-2xl font-black text-white">${appState.users.filter((user) => user.role === "Coordinador").length}</p>
-              <p class="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Coordinadores</p>
-            </div>
-          </div>
-          <div class="grid gap-3 lg:grid-cols-[1fr_170px_170px]">
-            <input id="user-search" class="field" placeholder="Buscar por nombre, correo o telefono" />
-            <select id="user-role-filter" class="field">
-              <option value="all">Todos los roles</option>
-              <option value="Coordinador">Coordinador</option>
-              <option value="Profesor">Profesor</option>
-              <option value="Acudiente">Acudiente</option>
-            </select>
-            <select id="user-status-filter" class="field">
-              <option value="all">Todos</option>
-              <option value="active">Activos</option>
-              <option value="inactive">Deshabilitados</option>
-            </select>
-          </div>
-          <div id="users-list" class="soft-scrollbar overflow-hidden rounded-lg border border-white/10"></div>
+    <section id="coord-users" class="stage-panel focus-zone">
+      ${sectionHeader("Usuarios registrados", "Consulta todas las cuentas y administra su estado sin mezclarlo con otros formularios.")}
+      <div class="mb-5 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-lg border border-emerald-300/15 bg-emerald-300/10 p-4">
+          <p class="text-2xl font-black text-white">${appState.users.filter((user) => user.active).length}</p>
+          <p class="text-xs font-black uppercase tracking-[0.16em] text-emerald-100">Activos</p>
+        </div>
+        <div class="rounded-lg border border-amber-300/15 bg-amber-300/10 p-4">
+          <p class="text-2xl font-black text-white">${appState.users.filter((user) => !user.active).length}</p>
+          <p class="text-xs font-black uppercase tracking-[0.16em] text-amber-100">Deshabilitados</p>
+        </div>
+        <div class="rounded-lg border border-cyan-300/15 bg-cyan-300/10 p-4">
+          <p class="text-2xl font-black text-white">${appState.users.filter((user) => user.role === "Coordinador").length}</p>
+          <p class="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Coordinadores</p>
         </div>
       </div>
-
-      <div class="mt-7 border-t border-white/10 pt-6">
-        <div class="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <h3 class="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Grados</h3>
-            <p class="mt-1 text-sm font-semibold text-slate-500">Organizacion academica vinculada al panel.</p>
-          </div>
-          <button id="add-grade" type="button" class="mini-action text-cyan-100">Agregar</button>
-        </div>
-        <div id="grades-list" class="grid gap-3 md:grid-cols-2"></div>
+      <div class="mb-4 grid gap-3 lg:grid-cols-[1fr_170px_170px_160px]">
+        <input id="user-search" class="field" placeholder="Buscar por nombre, correo o telefono" />
+        <select id="user-role-filter" class="field">
+          <option value="all">Todos los roles</option>
+          <option value="Coordinador">Coordinador</option>
+          <option value="Profesor">Profesor</option>
+          <option value="Acudiente">Acudiente</option>
+        </select>
+        <select id="user-status-filter" class="field">
+          <option value="all">Todos</option>
+          <option value="active">Activos</option>
+          <option value="inactive">Deshabilitados</option>
+        </select>
+        <button id="open-user-form" type="button" class="primary-action">Crear usuario</button>
       </div>
+      <div id="users-list" class="soft-scrollbar overflow-hidden rounded-lg border border-white/10"></div>
+    </section>
+
+    <section id="coord-user-form" class="stage-panel focus-zone">
+      ${sectionHeader(editingUser ? "Editar usuario" : "Crear usuario", editingUser ? "Actualiza los datos de la cuenta seleccionada." : "Registra una cuenta nueva sin saturar el listado de usuarios.")}
+      <form id="user-form" class="mx-auto grid max-w-2xl gap-4">
+        <input id="user-id-input" type="hidden" value="${escapeHtml(editingUser?.id || "")}" />
+        <div class="section-panel">
+          <p id="user-form-kicker" class="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">${editingUser ? "Edicion" : "Nueva cuenta"}</p>
+          <h3 id="user-form-title" class="mt-1 text-xl font-black text-white">${editingUser ? `Editar ${escapeHtml(editingUser.name)}` : "Crear usuario"}</h3>
+        </div>
+        <label class="grid gap-2 text-sm font-bold text-slate-300">Nombre completo
+          <input id="user-name-input" type="text" class="field" value="${escapeHtml(editingUser?.name || "")}" placeholder="Ej: Ana Torres" />
+        </label>
+        <label class="grid gap-2 text-sm font-bold text-slate-300">Correo
+          <input id="user-email-input" type="email" class="field" value="${escapeHtml(editingUser?.email || "")}" placeholder="correo@dominio.com" />
+        </label>
+        <label class="grid gap-2 text-sm font-bold text-slate-300">Telefono
+          <input id="user-phone-input" type="tel" class="field" value="${escapeHtml(editingUser?.phone || "")}" placeholder="Telefono de contacto" />
+        </label>
+        <label class="${editingUser ? "hidden" : "grid"} gap-2 text-sm font-bold text-slate-300" id="user-password-label">Contrasena inicial
+          <input id="user-password-input" type="password" class="field" placeholder="Minimo 6 caracteres" ${editingUser ? "" : "required"} />
+        </label>
+        <label class="grid gap-2 text-sm font-bold text-slate-300">Rol
+          <select id="user-role-input" class="field">
+            ${["Profesor", "Acudiente", "Coordinador"].map((role) => `<option ${role === (editingUser?.role || "Profesor") ? "selected" : ""}>${role}</option>`).join("")}
+          </select>
+        </label>
+        <label class="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.045] px-4 py-3 text-sm font-bold text-slate-300">
+          <span>Cuenta activa</span>
+          <input id="user-active-input" type="checkbox" class="h-5 w-5 accent-cyan-300" ${editingUser?.active === false ? "" : "checked"} />
+        </label>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <button id="user-submit-button" class="primary-action" type="submit">${editingUser ? "Guardar cambios" : "Crear usuario"}</button>
+          <button id="user-cancel-edit" class="secondary-action" type="button">Volver al listado</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="coord-grades" class="stage-panel focus-zone">
+      ${sectionHeader("Grados", "Gestiona la organizacion academica en una vista independiente.")}
+      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-2xl font-black text-white">${appState.grades.length} grados</p>
+          <p class="mt-1 text-sm font-semibold text-slate-500">Cursos disponibles para profesores y validacion de excusas.</p>
+        </div>
+        <button id="add-grade" type="button" class="primary-action">Agregar grado</button>
+      </div>
+      <div id="grades-list" class="grid gap-3 md:grid-cols-2"></div>
     </section>
 
     <section id="coord-message" class="stage-panel focus-zone">
@@ -1050,14 +1059,9 @@ async function renderQrCodes() {
 // Eventos del coordinador: crear usuarios, grados, filtros y decisiones de excusas.
 function bindCoordinator() {
   const resetUserForm = () => {
-    document.querySelector("#user-form").reset();
-    document.querySelector("#user-id-input").value = "";
-    document.querySelector("#user-active-input").checked = true;
-    document.querySelector("#user-password-label").classList.remove("hidden");
-    document.querySelector("#user-password-input").required = true;
-    document.querySelector("#user-form-kicker").textContent = "Nueva cuenta";
-    document.querySelector("#user-form-title").textContent = "Crear usuario";
-    document.querySelector("#user-submit-button").textContent = "Crear usuario";
+    editingUserId = "";
+    activeSectionByRole.Coordinador = "coord-users";
+    render();
   };
 
   document.querySelector("#user-form").addEventListener("submit", async (event) => {
@@ -1089,7 +1093,8 @@ function bindCoordinator() {
         });
       }
 
-      resetUserForm();
+      editingUserId = "";
+      activeSectionByRole.Coordinador = "coord-users";
       await syncRemoteData({ force: true });
     } catch (error) {
       alert(error.message);
@@ -1097,6 +1102,11 @@ function bindCoordinator() {
   });
 
   document.querySelector("#user-cancel-edit").addEventListener("click", resetUserForm);
+  document.querySelector("#open-user-form").addEventListener("click", () => {
+    editingUserId = "";
+    activeSectionByRole.Coordinador = "coord-user-form";
+    render();
+  });
 
   document.querySelector("#user-search").addEventListener("input", renderUsersList);
   document.querySelector("#user-role-filter").addEventListener("change", renderUsersList);
@@ -1111,19 +1121,9 @@ function bindCoordinator() {
       const user = appState.users.find((item) => item.id === editId);
       if (!user) return;
 
-      document.querySelector("#user-id-input").value = user.id;
-      document.querySelector("#user-name-input").value = user.name;
-      document.querySelector("#user-email-input").value = user.email;
-      document.querySelector("#user-phone-input").value = user.phone;
-      document.querySelector("#user-role-input").value = user.role;
-      document.querySelector("#user-active-input").checked = user.active;
-      document.querySelector("#user-password-input").value = "";
-      document.querySelector("#user-password-input").required = false;
-      document.querySelector("#user-password-label").classList.add("hidden");
-      document.querySelector("#user-form-kicker").textContent = "Edicion";
-      document.querySelector("#user-form-title").textContent = `Editar ${user.name}`;
-      document.querySelector("#user-submit-button").textContent = "Guardar cambios";
-      document.querySelector("#user-form").scrollIntoView({ behavior: "smooth", block: "start" });
+      editingUserId = user.id;
+      activeSectionByRole.Coordinador = "coord-user-form";
+      render();
       return;
     }
 
