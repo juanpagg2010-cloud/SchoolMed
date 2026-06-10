@@ -12,7 +12,7 @@ const getUserId = (user) => user?._id || user?.id;
 router.use(protect);
 router.use(authorizeRoles(COORDINATOR));
 
-// Envia un correo manual con el proveedor SMTP configurado, por ejemplo Brevo.
+// Envia un correo manual con Brevo API.
 router.post("/send", async (req, res) => {
   try {
     const { body, subject, to } = req.body;

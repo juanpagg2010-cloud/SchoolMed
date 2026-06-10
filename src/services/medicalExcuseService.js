@@ -70,6 +70,7 @@ const notifyGuardianReviewResult = async (excusa) => {
   try {
     return await sendMedicalExcuseReviewResult({
       email: guardianEmail,
+      qrPayload: excusa.qrPayload,
       rejectionReason: excusa.motivoRechazo,
       status: excusa.estado,
       studentName: excusa.nombreEstudiante,
