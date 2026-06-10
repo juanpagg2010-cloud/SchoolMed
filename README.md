@@ -1,6 +1,6 @@
 # SchoolMed
 
-SchoolMed es una API REST para gestionar excusas medicas escolares. El sistema permite que los acudientes registren excusas, validen el envio mediante un codigo unico enviado por correo, y que coordinadores revisen las solicitudes antes de que los docentes puedan consultarlas.
+SchoolMed es una API REST para gestionar excusas medicas escolares. El sistema permite que los acudientes registren excusas, que coordinadores revisen las solicitudes y que los docentes consulten las excusas aprobadas.
 
 ## Caracteristicas
 
@@ -8,12 +8,10 @@ SchoolMed es una API REST para gestionar excusas medicas escolares. El sistema p
 - Roles de usuario: `Acudiente`, `Profesor` y `Coordinador`.
 - Registro e inicio de sesion.
 - Creacion de excusas medicas por acudientes.
-- Verificacion de excusa con codigo unico por correo.
-- Reenvio del codigo de verificacion.
 - Revision institucional por coordinadores.
 - Consulta de excusas aprobadas por docentes.
 - Conexion a MongoDB con Mongoose.
-- Envio de correos con Nodemailer y Brevo SMTP.
+- Envio de correos con Brevo API.
 
 ## Tecnologias
 
@@ -23,8 +21,7 @@ SchoolMed es una API REST para gestionar excusas medicas escolares. El sistema p
 - Mongoose
 - JSON Web Token
 - Bcrypt
-- Nodemailer
-- Brevo SMTP
+- Brevo API
 
 ## Estructura del proyecto
 
@@ -59,12 +56,9 @@ MONGO_URI=mongodb+srv://usuario:password@cluster.mongodb.net/schoolmed
 JWT_SECRET=coloca_una_clave_larga_y_segura
 JWT_EXPIRES_IN=1d
 
-SMTP_HOST=smtp-relay-offshore-southamerica-east-v2.sendinblue.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=tu_login_smtp_de_brevo
-SMTP_PASS=tu_smtp_key_de_brevo
-MAIL_FROM=tu_correo_verificado_en_brevo
+BREVO_API_KEY=tu_api_key_de_brevo
+BREVO_SENDER_EMAIL=tu_correo_verificado_en_brevo
+BREVO_SENDER_NAME=SchoolMed
 ```
 
 > No subas el archivo `.env` al repositorio. Ya esta protegido en `.gitignore`.
@@ -99,18 +93,15 @@ GET /api/health
 
 1. El acudiente inicia sesion.
 2. El acudiente crea una excusa medica.
-3. La excusa se guarda como `PendienteVerificacion`.
-4. El sistema envia un codigo unico al correo del acudiente.
-5. El acudiente verifica el codigo.
-6. La excusa cambia a `PendienteRevision`.
-7. El coordinador revisa la excusa.
-8. Si la aprueba, queda como `Aprobada`.
-9. El docente puede consultar las excusas aprobadas.
+3. La excusa se guarda como `PendienteRevision`.
+4. El coordinador revisa la excusa.
+5. Si la aprueba, queda como `Aprobada`.
+6. El docente puede consultar las excusas aprobadas.
+7. Al aprobar o rechazar, el acudiente recibe un correo por Brevo API.
 
 ## Estados de una excusa
 
 ```txt
-PendienteVerificacion
 PendienteRevision
 Aprobada
 Rechazada
@@ -151,8 +142,6 @@ Acudiente:
 ```txt
 POST /api/v1/medical-excuses
 GET  /api/v1/medical-excuses/me
-POST /api/v1/medical-excuses/:id/verification
-POST /api/v1/medical-excuses/:id/verification/resend
 ```
 
 Coordinador:
@@ -223,12 +212,6 @@ Crear excusa:
 }
 ```
 
-Verificar codigo:
-
-```json
-{
-  "codigo": "123456"
-}
 ```
 
 Rechazar excusa:
@@ -250,9 +233,6 @@ Cancelar excusa:
 ## Seguridad
 
 - Las contrasenas se guardan hasheadas con bcrypt.
-- El codigo de verificacion de la excusa se guarda hasheado.
-- El codigo expira despues de 10 minutos.
-- La verificacion permite un maximo de 5 intentos.
 - Los roles se validan con middlewares.
 - Las variables sensibles se mantienen fuera de Git mediante `.gitignore`.
 

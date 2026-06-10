@@ -39,6 +39,7 @@ const fixedRole = document.body.dataset.dashboardRole || "";
 let activeRole = fixedRole || currentUser.role || "Coordinador";
 let selectedGradeId = "";
 let emailDraft = null;
+let flashMessage = null;
 const activeSectionByRole = {
   Coordinador: "coord-radar",
   Acudiente: "guardian-create",
@@ -353,6 +354,29 @@ function emptyState(message) {
   return `<p class="rounded-lg border border-white/10 bg-white/[0.035] px-4 py-8 text-sm font-bold text-slate-400">${message}</p>`;
 }
 
+// Mensaje temporal visible dentro del dashboard despues de acciones importantes.
+function setFlashMessage(title, message, type = "info") {
+  flashMessage = { message, title, type };
+}
+
+function renderFlashMessage() {
+  if (!flashMessage) return "";
+
+  const styles = {
+    error: "border-red-300/30 bg-red-400/10 text-red-100",
+    info: "border-cyan-300/30 bg-cyan-400/10 text-cyan-100",
+    success: "border-emerald-300/30 bg-emerald-400/10 text-emerald-100",
+    warning: "border-amber-300/30 bg-amber-400/10 text-amber-100",
+  };
+
+  return `
+    <div class="mb-5 rounded-lg border px-4 py-3 ${styles[flashMessage.type] || styles.info}">
+      <p class="text-sm font-black text-white">${escapeHtml(flashMessage.title)}</p>
+      <p class="mt-1 text-sm font-semibold">${escapeHtml(flashMessage.message)}</p>
+    </div>
+  `;
+}
+
 // Crea un boton lateral de navegacion interna del dashboard.
 function commandTile(action) {
   const isActive = action.target === activeSectionByRole[activeRole];
@@ -479,6 +503,7 @@ function renderCoordinator() {
     { code: "03", target: "coord-manage", title: "Gestionar usuarios", copy: "Crear cuentas y organizar grados." },
     { code: "04", target: "coord-message", title: "Comunicar familias", copy: "Preparar correo y ver movimientos." },
   ], `
+    ${renderFlashMessage()}
     <section id="coord-radar" class="stage-panel focus-zone animate-rise">
       ${sectionHeader("Radar institucional", "Una lectura rapida del estado actual del colegio.")}
       <div class="grid gap-4 lg:grid-cols-4">
@@ -735,8 +760,10 @@ function bindCoordinator() {
   });
 
   document.querySelector("#excuse-table").addEventListener("click", (event) => {
-    const approveId = event.target.closest("[data-approve]")?.dataset.approve;
-    const rejectId = event.target.closest("[data-reject]")?.dataset.reject;
+    const approveButton = event.target.closest("[data-approve]");
+    const rejectButton = event.target.closest("[data-reject]");
+    const approveId = approveButton?.dataset.approve;
+    const rejectId = rejectButton?.dataset.reject;
     const id = approveId || rejectId;
     if (!id) return;
 
@@ -744,20 +771,32 @@ function bindCoordinator() {
     if (!excuse) return;
 
     const reviewExcuse = async () => {
+      const actionButton = approveButton || rejectButton;
+
       try {
+        if (actionButton) {
+          actionButton.disabled = true;
+          actionButton.textContent = approveId ? "Aceptando..." : "Rechazando...";
+        }
+
         if (approveId) {
           const data = await apiRequest(`/medical-excuses/${id}/approve`, { method: "PATCH" });
           excuse.status = "Aprobada";
           const notification = data.emailNotification || data.excusa?.emailNotification || {};
           const sent = data.emailSent || notification.sent;
-          alert(sent
-            ? "Excusa aprobada y correo enviado."
-            : `Excusa aprobada, pero no se envio el correo: ${notification.reason || "revisa la configuracion de Brevo."}`);
+          setFlashMessage(
+            "Excusa aprobada",
+            sent
+              ? "La excusa fue aprobada y el correo se envio al acudiente."
+              : `La excusa fue aprobada, pero el correo no se envio: ${notification.reason || "revisa la configuracion de Brevo."}`,
+            sent ? "success" : "warning",
+          );
         } else {
           const motivoRechazo = prompt("Escribe el motivo del rechazo");
 
           if (!motivoRechazo?.trim()) {
-            alert("Debes escribir el motivo del rechazo.");
+            setFlashMessage("Rechazo incompleto", "Debes escribir el motivo del rechazo.", "warning");
+            render();
             return;
           }
 
@@ -768,14 +807,25 @@ function bindCoordinator() {
           excuse.status = "Rechazada";
           const notification = data.emailNotification || data.excusa?.emailNotification || {};
           const sent = data.emailSent || notification.sent;
-          alert(sent
-            ? "Excusa rechazada y correo enviado."
-            : `Excusa rechazada, pero no se envio el correo: ${notification.reason || "revisa la configuracion de Brevo."}`);
+          setFlashMessage(
+            "Excusa rechazada",
+            sent
+              ? "La excusa fue rechazada y el correo se envio al acudiente."
+              : `La excusa fue rechazada, pero el correo no se envio: ${notification.reason || "revisa la configuracion de Brevo."}`,
+            sent ? "success" : "warning",
+          );
         }
 
+        render();
         await syncRemoteData({ force: true });
       } catch (error) {
-        alert(`No se pudo actualizar la excusa: ${error.message}`);
+        setFlashMessage("No se pudo actualizar la excusa", error.message, "error");
+        render();
+      } finally {
+        if (actionButton) {
+          actionButton.disabled = false;
+          actionButton.textContent = approveId ? "Aceptar" : "Rechazar";
+        }
       }
     };
 

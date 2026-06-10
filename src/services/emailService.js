@@ -1,25 +1,57 @@
-import nodemailer from "nodemailer";
+const BREVO_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
 
-// Crea el transporte SMTP usando el proveedor configurado en variables de entorno.
-const getTransporter = () => {
-  const { SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_SECURE, SMTP_USER } = process.env;
+const getBrevoConfig = () => {
+  const { BREVO_API_KEY, BREVO_SENDER_EMAIL, BREVO_SENDER_NAME } = process.env;
 
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    return null;
+  return {
+    apiKey: BREVO_API_KEY,
+    senderEmail: BREVO_SENDER_EMAIL,
+    senderName: BREVO_SENDER_NAME || "SchoolMed",
+  };
+};
+
+const sendBrevoEmail = async ({ subject, textContent, to }) => {
+  const { apiKey, senderEmail, senderName } = getBrevoConfig();
+
+  if (!apiKey || !senderEmail) {
+    return {
+      reason: "Brevo API no configurada. Revisa BREVO_API_KEY y BREVO_SENDER_EMAIL.",
+      sent: false,
+    };
   }
 
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT || 587),
-    secure: SMTP_SECURE === "true",
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
+  const recipients = Array.isArray(to) ? to : [to];
+  const response = await fetch(BREVO_EMAIL_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": apiKey,
     },
+    body: JSON.stringify({
+      sender: {
+        email: senderEmail,
+        name: senderName,
+      },
+      subject,
+      textContent,
+      to: recipients.map((email) => ({ email })),
+    }),
   });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    return {
+      reason: data.message || `Brevo respondio con estado ${response.status}.`,
+      sent: false,
+      status: response.status,
+    };
+  }
+
+  return {
+    messageId: data.messageId,
+    sent: true,
+  };
 };
 
 // Notifica al acudiente cuando coordinacion aprueba o rechaza la excusa.
@@ -29,13 +61,6 @@ export const sendMedicalExcuseReviewResult = async ({
   status,
   studentName,
 }) => {
-  const transporter = getTransporter();
-
-  if (!transporter) {
-    console.warn("SMTP no configurado. No se envio resultado de revision.");
-    return { sent: false, reason: "SMTP no configurado" };
-  }
-
   const isApproved = status === "Aprobada";
   const subject = isApproved
     ? "Excusa medica aprobada"
@@ -44,11 +69,9 @@ export const sendMedicalExcuseReviewResult = async ({
     ? "La excusa medica fue aprobada por coordinacion."
     : "La excusa medica fue rechazada por coordinacion.";
 
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER,
-    to: email,
+  return sendBrevoEmail({
     subject,
-    text: [
+    textContent: [
       resultText,
       "",
       `Estudiante: ${studentName || "No especificado"}`,
@@ -59,28 +82,17 @@ export const sendMedicalExcuseReviewResult = async ({
     ]
       .filter(Boolean)
       .join("\n"),
+    to: email,
   });
-
-  return { sent: true };
 };
 
-// Envia correos manuales desde coordinacion usando el mismo proveedor SMTP.
+// Envia correos manuales desde coordinacion usando Brevo API.
 export const sendManualEmail = async ({ body, subject, to }) => {
-  const transporter = getTransporter();
-
-  if (!transporter) {
-    console.warn("SMTP no configurado. No se envio correo manual.");
-    return { sent: false, reason: "SMTP no configurado" };
-  }
-
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER,
-    to,
+  return sendBrevoEmail({
     subject,
-    text: body,
+    textContent: body,
+    to,
   });
-
-  return { sent: true };
 };
 
 export default {

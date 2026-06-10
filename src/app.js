@@ -30,7 +30,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Muestra la IP publica de salida del servidor para autorizar SMTP en Brevo.
+// Muestra la IP publica de salida del servidor para diagnosticos externos.
 app.get("/api/server-ip", async (req, res) => {
   try {
     const response = await fetch("https://api.ipify.org?format=json");
@@ -50,17 +50,13 @@ app.get("/api/server-ip", async (req, res) => {
 
 // Diagnostico publico y seguro del proveedor de correo configurado.
 app.get("/api/email-provider", (req, res) => {
-  const host = process.env.SMTP_HOST || "";
-  const isBrevo = host.includes("sendinblue.com") || host.includes("brevo.com");
-
   res.json({
     ok: true,
-    provider: isBrevo ? "Brevo" : "No identificado",
-    smtpHost: host || null,
-    smtpPort: process.env.SMTP_PORT || null,
-    smtpUserConfigured: Boolean(process.env.SMTP_USER),
-    smtpPasswordConfigured: Boolean(process.env.SMTP_PASS),
-    mailFrom: process.env.MAIL_FROM || null,
+    provider: "Brevo",
+    mode: "API",
+    apiKeyConfigured: Boolean(process.env.BREVO_API_KEY),
+    senderEmail: process.env.BREVO_SENDER_EMAIL || null,
+    senderName: process.env.BREVO_SENDER_NAME || "SchoolMed",
   });
 });
 
