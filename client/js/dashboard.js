@@ -127,14 +127,25 @@ function field(label, id, type = "text", placeholder = "") {
 
 // Helper para consumir la API autenticada desde el dashboard.
 async function apiRequest(path, options = {}) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30000);
+
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
+    signal: controller.signal,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${sessionToken}`,
       ...(options.headers || {}),
     },
-  });
+  }).catch((error) => {
+    if (error.name === "AbortError") {
+      throw new Error("La solicitud tardo demasiado. Revisa tu conexion o intenta con un archivo mas liviano.");
+    }
+
+    throw error;
+  }).finally(() => window.clearTimeout(timeout));
+
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok || data.ok === false) {
@@ -146,14 +157,25 @@ async function apiRequest(path, options = {}) {
 
 // Helper para subir formularios multipart sin forzar Content-Type manual.
 async function apiFormRequest(path, formData, options = {}) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 45000);
+
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
     body: formData,
+    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${sessionToken}`,
       ...(options.headers || {}),
     },
-  });
+  }).catch((error) => {
+    if (error.name === "AbortError") {
+      throw new Error("La subida tardo demasiado. Intenta con un PDF o imagen menor a 5 MB.");
+    }
+
+    throw error;
+  }).finally(() => window.clearTimeout(timeout));
+
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok || data.ok === false) {
@@ -919,6 +941,21 @@ function renderGuardian() {
 
       const formData = new FormData();
       const support = document.querySelector("#file").files[0];
+
+      if (support) {
+        const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+
+        if (!allowedTypes.includes(support.type)) {
+          alert("Solo puedes subir PDF, JPG, PNG o WEBP.");
+          return;
+        }
+
+        if (support.size > 5 * 1024 * 1024) {
+          alert("El archivo no puede pesar mas de 5 MB. Comprimelo o sube un PDF mas liviano.");
+          return;
+        }
+      }
+
       formData.append("nombreEstudiante", get("student"));
       formData.append("documentoEstudiante", get("document"));
       formData.append("grado", get("grade"));
