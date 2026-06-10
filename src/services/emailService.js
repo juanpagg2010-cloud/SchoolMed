@@ -24,6 +24,7 @@ const getTransporter = () => {
 
 // Notifica al acudiente cuando coordinacion aprueba o rechaza la excusa.
 export const sendMedicalExcuseReviewResult = async ({
+  validationCode,
   email,
   rejectionReason,
   status,
@@ -53,6 +54,7 @@ export const sendMedicalExcuseReviewResult = async ({
       "",
       `Estudiante: ${studentName || "No especificado"}`,
       `Estado: ${status}`,
+      isApproved && validationCode ? `Codigo de validacion: ${validationCode}` : "",
       rejectionReason ? `Motivo del rechazo: ${rejectionReason}` : "",
       "",
       "Puedes consultar el detalle en SchoolMed.",

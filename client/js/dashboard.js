@@ -48,6 +48,11 @@ const appState = loadState();
 const apiBaseUrl = "/api/v1";
 let hasSyncedRemoteData = false;
 let isSyncingRemoteData = false;
+let validationResult = null;
+let validationScanner = null;
+let validationScannerRunning = false;
+let qrCodeLibraryPromise = null;
+let qrScannerLibraryPromise = null;
 
 // Referencias a regiones dinamicas del dashboard.
 const root = document.querySelector("#dashboard-root");
@@ -230,7 +235,48 @@ function mapExcuseFromApi(excuse) {
     end: String(excuse.fechaFin || "").slice(0, 10),
     status: excuse.estado || "PendienteRevision",
     file: file.nombreOriginal || file.nombreArchivo || "Sin archivo",
+    validationCode: excuse.codigoValidacion || "",
+    qrPayload: excuse.qrPayload || excuse.codigoValidacion || "",
   };
+}
+
+function loadExternalScript(src, globalName) {
+  if (globalName && window[globalName]) {
+    return Promise.resolve(window[globalName]);
+  }
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+
+    if (existing) {
+      existing.addEventListener("load", () => resolve(globalName ? window[globalName] : true), { once: true });
+      existing.addEventListener("error", () => reject(new Error("No se pudo cargar el recurso externo.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve(globalName ? window[globalName] : true);
+    script.onerror = () => reject(new Error("No se pudo cargar el recurso externo."));
+    document.head.appendChild(script);
+  });
+}
+
+function loadQrCodeLibrary() {
+  qrCodeLibraryPromise ||= loadExternalScript(
+    "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js",
+    "QRCode",
+  );
+  return qrCodeLibraryPromise;
+}
+
+function loadQrScannerLibrary() {
+  qrScannerLibraryPromise ||= loadExternalScript(
+    "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js",
+    "Html5Qrcode",
+  );
+  return qrScannerLibraryPromise;
 }
 
 // Carga todos los datos persistentes que necesita el rol actual.
@@ -476,8 +522,9 @@ function renderCoordinator() {
   root.innerHTML = commandShell([
     { code: "01", target: "coord-radar", title: "Radar institucional", copy: "Indicadores para presentar." },
     { code: "02", target: "coord-review", title: "Revisar excusas", copy: "Filtrar, aceptar, rechazar y contactar." },
-    { code: "03", target: "coord-manage", title: "Gestionar usuarios", copy: "Crear cuentas y organizar grados." },
-    { code: "04", target: "coord-message", title: "Comunicar familias", copy: "Preparar correo y ver movimientos." },
+    { code: "03", target: "coord-validate", title: "Validar QR", copy: "Escanear o buscar codigo aprobado." },
+    { code: "04", target: "coord-manage", title: "Gestionar usuarios", copy: "Crear cuentas y organizar grados." },
+    { code: "05", target: "coord-message", title: "Comunicar familias", copy: "Preparar correo y ver movimientos." },
   ], `
     <section id="coord-radar" class="stage-panel focus-zone animate-rise">
       ${sectionHeader("Radar institucional", "Una lectura rapida del estado actual del colegio.")}
@@ -513,6 +560,30 @@ function renderCoordinator() {
         <button id="clear-filters" type="button" class="secondary-action">Limpiar filtro</button>
       </div>
       <div id="excuse-table" class="soft-scrollbar overflow-hidden rounded-lg border border-white/10"></div>
+    </section>
+
+    <section id="coord-validate" class="stage-panel focus-zone">
+      ${sectionHeader("Validar excusa aceptada", "Lee el QR del acudiente o busca el codigo unico entregado al aprobar la excusa.")}
+      <div class="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <div class="grid gap-4">
+          <form id="validation-form" class="section-panel grid gap-4">
+            <label class="grid gap-2 text-sm font-bold text-slate-300">Codigo de validacion
+              <input id="validation-code" class="field uppercase" placeholder="SM-2026-AB12CD" autocomplete="off" />
+            </label>
+            <div class="flex flex-wrap gap-3">
+              <button class="primary-action" type="submit">Buscar codigo</button>
+              <button id="start-qr-scan" class="secondary-action" type="button">Leer QR</button>
+              <button id="stop-qr-scan" class="mini-action text-slate-200" type="button">Detener</button>
+            </div>
+          </form>
+          <div class="section-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Camara</p>
+            <div id="qr-reader" class="mt-4 min-h-56 overflow-hidden rounded-lg border border-white/10 bg-slate-950/45"></div>
+            <p id="qr-reader-status" class="mt-3 text-sm font-semibold text-slate-400">Lista para escanear cuando el coordinador active la camara.</p>
+          </div>
+        </div>
+        <div id="validation-result" class="section-panel"></div>
+      </div>
     </section>
 
     <section id="coord-manage" class="stage-panel focus-zone">
@@ -578,6 +649,7 @@ function renderCoordinator() {
 
   renderGradesList();
   renderCoordinatorExcuses();
+  renderValidationResult();
   bindCoordinator();
   bindCommandShell();
 }
@@ -637,6 +709,140 @@ function renderCoordinatorExcuses() {
       `).join("") || `<p class="px-4 py-8 text-sm font-bold text-slate-400">No hay excusas con esos filtros.</p>`}
     </div>
   `;
+}
+
+function renderValidationResult() {
+  const container = document.querySelector("#validation-result");
+  if (!container) return;
+
+  if (!validationResult) {
+    container.innerHTML = emptyState("Escanea un QR o escribe un codigo para validar si la excusa fue aceptada.");
+    return;
+  }
+
+  if (!validationResult.accepted) {
+    container.innerHTML = `
+      <div class="rounded-lg border border-red-400/25 bg-red-400/10 p-5">
+        <p class="text-xs font-black uppercase tracking-[0.18em] text-red-100">No aparece aceptada</p>
+        <h3 class="mt-2 text-2xl font-black text-white">La excusa no fue encontrada como aceptada.</h3>
+        <p class="mt-3 text-sm font-semibold leading-6 text-red-100">${escapeHtml(validationResult.message || "Si no aparece, no esta aceptada en SchoolMed.")}</p>
+      </div>
+    `;
+    return;
+  }
+
+  const excuse = validationResult.excusa;
+  container.innerHTML = `
+    <div class="grid gap-4">
+      <div class="rounded-lg border border-emerald-300/30 bg-emerald-300/10 p-5">
+        <p class="text-xs font-black uppercase tracking-[0.18em] text-emerald-100">Excusa aceptada</p>
+        <h3 class="mt-2 text-2xl font-black text-white">${escapeHtml(excuse.nombreEstudiante || "Estudiante")}</h3>
+        <p class="mt-2 text-sm font-semibold text-emerald-100">Codigo ${escapeHtml(excuse.codigoValidacion || "")} - ${escapeHtml(validationResult.vigencia || excuse.vigencia || "")}</p>
+      </div>
+      <div class="grid gap-3 text-sm font-semibold text-slate-300 sm:grid-cols-2">
+        <p class="rounded-lg bg-white/[0.055] p-3"><span class="block text-xs font-black uppercase tracking-[0.16em] text-slate-500">Acudiente</span>${escapeHtml(excuse.acudienteId?.name || "No registrado")}</p>
+        <p class="rounded-lg bg-white/[0.055] p-3"><span class="block text-xs font-black uppercase tracking-[0.16em] text-slate-500">Grado</span>${escapeHtml(excuse.grado || "")} ${escapeHtml(excuse.grupo || "")}</p>
+        <p class="rounded-lg bg-white/[0.055] p-3"><span class="block text-xs font-black uppercase tracking-[0.16em] text-slate-500">Desde</span>${String(excuse.fechaInicio || "").slice(0, 10)}</p>
+        <p class="rounded-lg bg-white/[0.055] p-3"><span class="block text-xs font-black uppercase tracking-[0.16em] text-slate-500">Hasta</span>${String(excuse.fechaFin || "").slice(0, 10)}</p>
+      </div>
+      <p class="rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm leading-6 text-slate-300">${escapeHtml(excuse.descripcion || "Sin descripcion adicional.")}</p>
+    </div>
+  `;
+}
+
+async function validateExcuseCode(code) {
+  const normalizedCode = String(code || "").trim().toUpperCase();
+  if (!normalizedCode) return;
+
+  const input = document.querySelector("#validation-code");
+  if (input) input.value = normalizedCode;
+
+  try {
+    const data = await apiRequest(`/medical-excuses/validate/${encodeURIComponent(normalizedCode)}`);
+    validationResult = {
+      accepted: true,
+      excusa: data.excusa,
+      message: data.message,
+      vigencia: data.excusa?.vigencia,
+    };
+  } catch (error) {
+    validationResult = {
+      accepted: false,
+      message: error.message || "Si no aparece, no esta aceptada en SchoolMed.",
+    };
+  }
+
+  renderValidationResult();
+}
+
+async function stopValidationScanner() {
+  if (!validationScanner || !validationScannerRunning) return;
+
+  try {
+    await validationScanner.stop();
+  } catch (error) {
+    console.warn(`No se pudo detener el lector QR: ${error.message}`);
+  } finally {
+    validationScannerRunning = false;
+    document.querySelector("#qr-reader-status").textContent = "Lector QR detenido.";
+  }
+}
+
+async function startValidationScanner() {
+  const status = document.querySelector("#qr-reader-status");
+  status.textContent = "Preparando camara...";
+
+  try {
+    const Html5Qrcode = await loadQrScannerLibrary();
+    validationScanner ||= new Html5Qrcode("qr-reader");
+
+    if (validationScannerRunning) return;
+
+    await validationScanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      async (decodedText) => {
+        status.textContent = "QR leido. Validando codigo...";
+        await stopValidationScanner();
+        await validateExcuseCode(decodedText);
+      },
+    );
+
+    validationScannerRunning = true;
+    status.textContent = "Apunta la camara al QR del acudiente.";
+  } catch (error) {
+    status.textContent = "No se pudo activar el lector QR. Puedes buscar por codigo manualmente.";
+    alert(`No se pudo abrir la camara o cargar el lector QR: ${error.message}`);
+  }
+}
+
+async function renderQrCodes() {
+  const targets = document.querySelectorAll("[data-qr-payload]");
+  if (!targets.length) return;
+
+  try {
+    const QRCode = await loadQrCodeLibrary();
+
+    targets.forEach((target) => {
+      const payload = target.dataset.qrPayload;
+      if (!payload || target.dataset.rendered === "true") return;
+
+      target.innerHTML = "";
+      new QRCode(target, {
+        text: payload,
+        width: 132,
+        height: 132,
+        colorDark: "#0f172a",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+      target.dataset.rendered = "true";
+    });
+  } catch (error) {
+    targets.forEach((target) => {
+      target.innerHTML = `<p class="p-3 text-center text-xs font-bold text-slate-500">QR no disponible. Usa el codigo.</p>`;
+    });
+  }
 }
 
 // Eventos del coordinador: crear usuarios, grados, filtros y decisiones de excusas.
@@ -733,6 +939,18 @@ function bindCoordinator() {
     document.querySelector("#excuse-status-filter").value = "all";
     renderCoordinatorExcuses();
   });
+
+  document.querySelector("#validation-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await validateExcuseCode(document.querySelector("#validation-code").value);
+  });
+
+  document.querySelector("#validation-code").addEventListener("input", (event) => {
+    event.target.value = event.target.value.toUpperCase();
+  });
+
+  document.querySelector("#start-qr-scan").addEventListener("click", startValidationScanner);
+  document.querySelector("#stop-qr-scan").addEventListener("click", stopValidationScanner);
 
   document.querySelector("#excuse-table").addEventListener("click", (event) => {
     const approveId = event.target.closest("[data-approve]")?.dataset.approve;
@@ -920,6 +1138,12 @@ function renderGuardian() {
               <div class="lg:text-right">
                 <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Soporte</p>
                 <p class="mt-1 text-sm font-black text-slate-200">${escapeHtml(excuse.file || "Sin archivo")}</p>
+                ${excuse.status === "Aprobada" && excuse.validationCode ? `
+                  <div class="mt-4 rounded-lg border border-emerald-300/20 bg-white p-3 text-slate-950 lg:ml-auto">
+                    <div class="mx-auto grid h-36 w-36 place-items-center" data-qr-payload="${escapeHtml(excuse.qrPayload || excuse.validationCode)}"></div>
+                  </div>
+                  <p class="mt-3 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-center text-xs font-black uppercase tracking-[0.12em] text-emerald-100">${escapeHtml(excuse.validationCode)}</p>
+                ` : ""}
               </div>
             </article>
           `).join("") || `<p class="py-8 text-sm font-bold text-slate-400">Aun no has subido excusas medicas.</p>`}
@@ -982,6 +1206,7 @@ function renderGuardian() {
       }
     }
   });
+  renderQrCodes();
   bindCommandShell();
 }
 

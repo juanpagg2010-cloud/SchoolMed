@@ -76,6 +76,21 @@ const medicalExcuseSchema = new Schema(
       type: String,
       trim: true,
     },
+    codigoValidacion: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    qrPayload: {
+      type: String,
+      trim: true,
+    },
+    fechaCodigoValidacion: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

@@ -2,6 +2,32 @@ import MedicalExcuse from "../models/medicalExcuse.js";
 import User from "../models/userModel.js";
 import { createActivity } from "./activityService.js";
 import { sendMedicalExcuseReviewResult } from "./emailService.js";
+import crypto from "node:crypto";
+
+const VALIDATION_PREFIX = "SM";
+
+const normalizeValidationCode = (code = "") => String(code).trim().toUpperCase();
+
+const generateValidationCode = () => {
+  const year = new Date().getFullYear();
+  const random = crypto.randomBytes(4).toString("hex").toUpperCase();
+  return `${VALIDATION_PREFIX}-${year}-${random}`;
+};
+
+const generateUniqueValidationCode = async () => {
+  for (let attempts = 0; attempts < 8; attempts += 1) {
+    const code = generateValidationCode();
+    const exists = await MedicalExcuse.exists({ codigoValidacion: code });
+
+    if (!exists) {
+      return code;
+    }
+  }
+
+  const error = new Error("No se pudo generar un codigo unico de validacion.");
+  error.statusCode = 500;
+  throw error;
+};
 
 // Normaliza los datos del archivo subido para guardarlos dentro de la excusa.
 const getUploadedFile = (file) => {
@@ -47,6 +73,7 @@ const notifyGuardianReviewResult = async (excusa) => {
       rejectionReason: excusa.motivoRechazo,
       status: excusa.estado,
       studentName: excusa.nombreEstudiante,
+      validationCode: excusa.codigoValidacion,
     });
   } catch (error) {
     console.error(`No se pudo enviar correo de revision: ${error.message}`);
@@ -180,6 +207,34 @@ export const getMedicalExcuseById = async (id) => {
   return excusa;
 };
 
+export const getApprovedExcuseByValidationCode = async (code) => {
+  const codigoValidacion = normalizeValidationCode(code);
+
+  if (!codigoValidacion) {
+    const error = new Error("Debes ingresar un codigo de validacion.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const excusa = await MedicalExcuse.findOne({
+    codigoValidacion,
+    estado: "Aprobada",
+  })
+    .populate("acudienteId", "name email phone")
+    .populate("coordinadorId", "name email");
+
+  if (!excusa) {
+    const error = new Error("No aparece una excusa medica aceptada con ese codigo.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return {
+    ...excusa.toObject(),
+    vigencia: getValidity(excusa),
+  };
+};
+
 // Aplica la decision del coordinador sobre una excusa ya verificada.
 export const reviewMedicalExcuse = async (id, coordinatorId, review) => {
   const currentExcuse = await MedicalExcuse.findById(id);
@@ -190,13 +245,31 @@ export const reviewMedicalExcuse = async (id, coordinatorId, review) => {
     throw error;
   }
 
+  const reviewPayload = {
+    ...review,
+    coordinadorId: coordinatorId,
+    fechaRevision: new Date(),
+  };
+  const unsetPayload = {};
+
+  if (review.estado === "Aprobada" && !currentExcuse.codigoValidacion) {
+    const codigoValidacion = await generateUniqueValidationCode();
+    reviewPayload.codigoValidacion = codigoValidacion;
+    reviewPayload.qrPayload = codigoValidacion;
+    reviewPayload.fechaCodigoValidacion = new Date();
+  }
+
+  if (["Rechazada", "Cancelada"].includes(review.estado)) {
+    unsetPayload.codigoValidacion = "";
+    unsetPayload.qrPayload = "";
+    unsetPayload.fechaCodigoValidacion = "";
+  }
+
   const excusa = await MedicalExcuse.findByIdAndUpdate(
     id,
-    {
-      ...review,
-      coordinadorId: coordinatorId,
-      fechaRevision: new Date(),
-    },
+    Object.keys(unsetPayload).length
+      ? { $set: reviewPayload, $unset: unsetPayload }
+      : { $set: reviewPayload },
     { new: true, runValidators: true },
   )
     .populate("acudienteId", "name email phone")
@@ -234,5 +307,6 @@ export default {
   getExcusesGroupedByGrade,
   getTeacherExcuses,
   getMedicalExcuseById,
+  getApprovedExcuseByValidationCode,
   reviewMedicalExcuse,
 };
