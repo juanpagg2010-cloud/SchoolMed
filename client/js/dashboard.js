@@ -84,6 +84,12 @@ const statusLabels = {
   PendienteRevision: "Por revisar",
 };
 
+const excuseStatusOrder = {
+  PendienteRevision: 0,
+  Aprobada: 1,
+  Rechazada: 2,
+};
+
 // Estilos de cada estado de excusa.
 const statusClasses = {
   Aprobada: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
@@ -862,10 +868,16 @@ function renderCoordinatorExcuses() {
   const table = document.querySelector("#excuse-table");
   const search = document.querySelector("#excuse-search")?.value.toLowerCase() || "";
   const status = document.querySelector("#excuse-status-filter")?.value || "all";
-  const rows = appState.excuses.filter((excuse) => {
-    const text = `${excuse.student} ${excuse.guardian} ${excuse.grade} ${excuse.group}`.toLowerCase();
-    return text.includes(search) && (status === "all" || excuse.status === status);
-  });
+  const rows = appState.excuses
+    .filter((excuse) => {
+      const text = `${excuse.student} ${excuse.guardian} ${excuse.grade} ${excuse.group}`.toLowerCase();
+      return text.includes(search) && (status === "all" || excuse.status === status);
+    })
+    .sort((a, b) => {
+      const byStatus = (excuseStatusOrder[a.status] ?? 99) - (excuseStatusOrder[b.status] ?? 99);
+      if (byStatus !== 0) return byStatus;
+      return `${a.student} ${a.guardian}`.localeCompare(`${b.student} ${b.guardian}`, "es");
+    });
   const totalPages = Math.max(1, Math.ceil(rows.length / coordinatorExcusesPerPage));
   coordinatorExcusePage = Math.min(Math.max(coordinatorExcusePage, 1), totalPages);
   const startIndex = (coordinatorExcusePage - 1) * coordinatorExcusesPerPage;
