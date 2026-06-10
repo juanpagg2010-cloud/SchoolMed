@@ -74,7 +74,7 @@ export const getAllUsers = async ({ role, isActive } = {}) => {
 };
 
 // Actualiza datos administrativos de un usuario.
-export const updateUserById = async (id, payload) => {
+export const updateUserById = async (id, payload, actorId) => {
   const { name, email, role, phone, isActive } = payload;
 
   if (role && !VALID_ROLES.includes(role)) {
@@ -83,7 +83,19 @@ export const updateUserById = async (id, payload) => {
     throw error;
   }
 
-  const updates = { name, email, role, phone, isActive };
+  if (actorId && String(actorId) === String(id) && isActive === false) {
+    const error = new Error("No puedes deshabilitar tu propia cuenta.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const updates = {
+    name,
+    email: email ? email.toLowerCase() : email,
+    role,
+    phone,
+    isActive,
+  };
   Object.keys(updates).forEach((key) => updates[key] === undefined && delete updates[key]);
 
   const user = await User.findByIdAndUpdate(id, updates, {
@@ -97,11 +109,45 @@ export const updateUserById = async (id, payload) => {
     throw error;
   }
 
+  await createActivity({
+    actorId,
+    message: `${user.name} fue actualizado${isActive === false ? " y deshabilitado" : isActive === true ? " y habilitado" : ""}.`,
+    metadata: { role: user.role, userId: user._id },
+    type: "Usuario",
+  });
+
   return user;
+};
+
+// Elimina un usuario registrado desde el panel administrativo.
+export const deleteUserById = async (id, actorId) => {
+  if (actorId && String(actorId) === String(id)) {
+    const error = new Error("No puedes eliminar tu propia cuenta.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const user = await User.findByIdAndDelete(id);
+
+  if (!user) {
+    const error = new Error("Usuario no encontrado.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await createActivity({
+    actorId,
+    message: `${user.name} fue eliminado del sistema.`,
+    metadata: { role: user.role, userId: user._id },
+    type: "Usuario",
+  });
+
+  return removePassword(user);
 };
 
 export default {
   createUserByAdmin,
+  deleteUserById,
   getAllUsers,
   updateUserById,
 };

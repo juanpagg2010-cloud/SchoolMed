@@ -1,4 +1,6 @@
-import { getAllUsers, updateUserById } from "../services/userService.js";
+import { deleteUserById, getAllUsers, updateUserById } from "../services/userService.js";
+
+const getUserId = (user) => user?._id || user?.id;
 
 // Controlador para listar usuarios con filtros opcionales.
 export const getUsers = async (req, res) => {
@@ -21,7 +23,7 @@ export const getUsers = async (req, res) => {
 // Controlador para actualizar datos de un usuario.
 export const updateUser = async (req, res) => {
   try {
-    const user = await updateUserById(req.params.id, req.body);
+    const user = await updateUserById(req.params.id, req.body, getUserId(req.user));
 
     return res.json({
       ok: true,
@@ -35,7 +37,25 @@ export const updateUser = async (req, res) => {
   }
 };
 
+// Controlador para eliminar un usuario registrado.
+export const deleteUser = async (req, res) => {
+  try {
+    const user = await deleteUserById(req.params.id, getUserId(req.user));
+
+    return res.json({
+      ok: true,
+      user,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      ok: false,
+      message: error.message || "No se pudo eliminar el usuario.",
+    });
+  }
+};
+
 export default {
+  deleteUser,
   getUsers,
   updateUser,
 };

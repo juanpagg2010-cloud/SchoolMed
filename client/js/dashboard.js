@@ -199,6 +199,7 @@ function mapUserFromApi(user) {
   return {
     id: user._id || user.id,
     active: user.isActive,
+    createdAt: user.createdAt || "",
     email: user.email || "",
     name: user.name || "",
     phone: user.phone || "",
@@ -556,7 +557,7 @@ function renderCoordinator() {
     { code: "01", target: "coord-radar", title: "Radar institucional", copy: "Indicadores para presentar." },
     { code: "02", target: "coord-review", title: "Revisar excusas", copy: "Filtrar, aceptar, rechazar y contactar." },
     { code: "03", target: "coord-validate", title: "Validar QR", copy: "Escanear o buscar codigo aprobado." },
-    { code: "04", target: "coord-manage", title: "Gestionar usuarios", copy: "Crear cuentas y organizar grados." },
+    { code: "04", target: "coord-manage", title: "Administrar usuarios", copy: "Crear, editar, deshabilitar o eliminar cuentas." },
     { code: "05", target: "coord-message", title: "Comunicar familias", copy: "Preparar correo y ver movimientos." },
   ], `
     ${renderFlashMessage()}
@@ -621,14 +622,20 @@ function renderCoordinator() {
     </section>
 
     <section id="coord-manage" class="stage-panel focus-zone">
-      <div class="grid gap-7 lg:grid-cols-[0.95fr_1.05fr]">
-        <div>
-        ${sectionHeader("Administracion", "Crea usuarios y grados sin salir del panel.")}
-        <form id="user-form" class="grid gap-4">
+      ${sectionHeader("Administracion de usuarios", "Gestiona todas las cuentas registradas, su estado y sus datos principales.")}
+      <div class="grid gap-6 xl:grid-cols-[360px_1fr]">
+        <form id="user-form" class="section-panel grid gap-4">
+          <input id="user-id-input" type="hidden" />
+          <div>
+            <p id="user-form-kicker" class="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Nueva cuenta</p>
+            <h3 id="user-form-title" class="mt-1 text-xl font-black text-white">Crear usuario</h3>
+          </div>
           ${field("Nombre completo", "user-name-input", "text", "Ej: Ana Torres")}
           ${field("Correo", "user-email-input", "email", "correo@dominio.com")}
           ${field("Telefono", "user-phone-input", "tel", "Telefono de contacto")}
-          ${field("Contrasena inicial", "user-password-input", "password", "Minimo 6 caracteres")}
+          <label class="grid gap-2 text-sm font-bold text-slate-300" id="user-password-label">Contrasena inicial
+            <input id="user-password-input" type="password" class="field" placeholder="Minimo 6 caracteres" />
+          </label>
           <label class="grid gap-2 text-sm font-bold text-slate-300">Rol
             <select id="user-role-input" class="field">
               <option>Profesor</option>
@@ -636,17 +643,58 @@ function renderCoordinator() {
               <option>Coordinador</option>
             </select>
           </label>
-          <button class="primary-action" type="submit">Crear usuario</button>
-        </form>
-        </div>
-
-        <div>
-          <div class="mb-3 flex items-center justify-between gap-3">
-            <h3 class="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Grados</h3>
-            <button id="add-grade" type="button" class="mini-action text-cyan-100">Agregar</button>
+          <label class="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.045] px-4 py-3 text-sm font-bold text-slate-300">
+            <span>Cuenta activa</span>
+            <input id="user-active-input" type="checkbox" class="h-5 w-5 accent-cyan-300" checked />
+          </label>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <button id="user-submit-button" class="primary-action" type="submit">Crear usuario</button>
+            <button id="user-cancel-edit" class="secondary-action" type="button">Limpiar</button>
           </div>
-          <div id="grades-list" class="grid gap-3"></div>
+        </form>
+
+        <div class="grid gap-5">
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div class="rounded-lg border border-emerald-300/15 bg-emerald-300/10 p-4">
+              <p class="text-2xl font-black text-white">${appState.users.filter((user) => user.active).length}</p>
+              <p class="text-xs font-black uppercase tracking-[0.16em] text-emerald-100">Activos</p>
+            </div>
+            <div class="rounded-lg border border-amber-300/15 bg-amber-300/10 p-4">
+              <p class="text-2xl font-black text-white">${appState.users.filter((user) => !user.active).length}</p>
+              <p class="text-xs font-black uppercase tracking-[0.16em] text-amber-100">Deshabilitados</p>
+            </div>
+            <div class="rounded-lg border border-cyan-300/15 bg-cyan-300/10 p-4">
+              <p class="text-2xl font-black text-white">${appState.users.filter((user) => user.role === "Coordinador").length}</p>
+              <p class="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Coordinadores</p>
+            </div>
+          </div>
+          <div class="grid gap-3 lg:grid-cols-[1fr_170px_170px]">
+            <input id="user-search" class="field" placeholder="Buscar por nombre, correo o telefono" />
+            <select id="user-role-filter" class="field">
+              <option value="all">Todos los roles</option>
+              <option value="Coordinador">Coordinador</option>
+              <option value="Profesor">Profesor</option>
+              <option value="Acudiente">Acudiente</option>
+            </select>
+            <select id="user-status-filter" class="field">
+              <option value="all">Todos</option>
+              <option value="active">Activos</option>
+              <option value="inactive">Deshabilitados</option>
+            </select>
+          </div>
+          <div id="users-list" class="soft-scrollbar overflow-hidden rounded-lg border border-white/10"></div>
         </div>
+      </div>
+
+      <div class="mt-7 border-t border-white/10 pt-6">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Grados</h3>
+            <p class="mt-1 text-sm font-semibold text-slate-500">Organizacion academica vinculada al panel.</p>
+          </div>
+          <button id="add-grade" type="button" class="mini-action text-cyan-100">Agregar</button>
+        </div>
+        <div id="grades-list" class="grid gap-3 md:grid-cols-2"></div>
       </div>
     </section>
 
@@ -681,6 +729,7 @@ function renderCoordinator() {
     </section>
   `);
 
+  renderUsersList();
   renderGradesList();
   renderCoordinatorExcuses();
   renderValidationResult();
@@ -705,6 +754,77 @@ function renderGradesList() {
       </div>
     </div>
   `).join("") || emptyState("Aun no hay grados creados.");
+}
+
+function userStatusBadge(user) {
+  return `
+    <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-black ${user.active ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100" : "border-amber-300/30 bg-amber-300/10 text-amber-100"}">
+      <span class="h-1.5 w-1.5 rounded-full ${user.active ? "bg-emerald-300" : "bg-amber-200"}"></span>
+      ${user.active ? "Activo" : "Deshabilitado"}
+    </span>
+  `;
+}
+
+function userRoleBadge(role) {
+  const roleClasses = {
+    Coordinador: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
+    Profesor: "border-sky-300/25 bg-sky-300/10 text-sky-100",
+    Acudiente: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
+  };
+
+  return `<span class="rounded-full border px-3 py-1 text-xs font-black ${roleClasses[role] || "border-white/10 bg-white/10 text-slate-200"}">${escapeHtml(role)}</span>`;
+}
+
+function formatUserDate(value) {
+  if (!value) return "Sin fecha";
+
+  return new Date(value).toLocaleDateString("es-CO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// Listado filtrable de usuarios para administracion del coordinador.
+function renderUsersList() {
+  const list = document.querySelector("#users-list");
+  if (!list) return;
+
+  const search = document.querySelector("#user-search")?.value.toLowerCase() || "";
+  const role = document.querySelector("#user-role-filter")?.value || "all";
+  const status = document.querySelector("#user-status-filter")?.value || "all";
+  const rows = appState.users.filter((user) => {
+    const text = `${user.name} ${user.email} ${user.phone}`.toLowerCase();
+    const matchesStatus = status === "all" || (status === "active" ? user.active : !user.active);
+    return text.includes(search) && (role === "all" || user.role === role) && matchesStatus;
+  });
+
+  list.innerHTML = `
+    <div class="hidden grid-cols-[1.1fr_0.8fr_0.6fr_0.7fr_1fr] gap-4 bg-white/[0.065] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500 xl:grid">
+      <span>Usuario</span><span>Contacto</span><span>Rol</span><span>Estado</span><span>Acciones</span>
+    </div>
+    <div class="grid gap-2 p-2">
+      ${rows.map((user, index) => `
+        <article class="stagger-item grid gap-4 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-4 transition duration-300 hover:-translate-y-0.5 hover:border-cyan-200/30 hover:bg-white/[0.07] xl:grid-cols-[1.1fr_0.8fr_0.6fr_0.7fr_1fr] xl:items-center" style="--i:${index}">
+          <div>
+            <p class="font-black text-white">${escapeHtml(user.name)}</p>
+            <p class="text-xs font-semibold text-slate-500">Registrado: ${formatUserDate(user.createdAt)}</p>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-slate-200">${escapeHtml(user.email)}</p>
+            <p class="text-xs font-semibold text-slate-500">${escapeHtml(user.phone || "Sin telefono")}</p>
+          </div>
+          <div>${userRoleBadge(user.role)}</div>
+          <div>${userStatusBadge(user)}</div>
+          <div class="flex flex-wrap gap-2">
+            <button data-edit-user="${user.id}" type="button" class="mini-action text-sky-100">Editar</button>
+            <button data-toggle-user="${user.id}" type="button" class="mini-action ${user.active ? "text-amber-100" : "text-emerald-100"}">${user.active ? "Deshabilitar" : "Habilitar"}</button>
+            <button data-delete-user="${user.id}" type="button" class="mini-action text-red-100">Eliminar</button>
+          </div>
+        </article>
+      `).join("") || `<p class="px-4 py-8 text-sm font-bold text-slate-400">No hay usuarios con esos filtros.</p>`}
+    </div>
+  `;
 }
 
 // Tabla filtrable de excusas para revision del coordinador.
@@ -929,29 +1049,110 @@ async function renderQrCodes() {
 
 // Eventos del coordinador: crear usuarios, grados, filtros y decisiones de excusas.
 function bindCoordinator() {
+  const resetUserForm = () => {
+    document.querySelector("#user-form").reset();
+    document.querySelector("#user-id-input").value = "";
+    document.querySelector("#user-active-input").checked = true;
+    document.querySelector("#user-password-label").classList.remove("hidden");
+    document.querySelector("#user-password-input").required = true;
+    document.querySelector("#user-form-kicker").textContent = "Nueva cuenta";
+    document.querySelector("#user-form-title").textContent = "Crear usuario";
+    document.querySelector("#user-submit-button").textContent = "Crear usuario";
+  };
+
   document.querySelector("#user-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const id = document.querySelector("#user-id-input").value;
     const name = document.querySelector("#user-name-input").value.trim();
     const email = document.querySelector("#user-email-input").value.trim();
     const phone = document.querySelector("#user-phone-input").value.trim();
     const password = document.querySelector("#user-password-input").value;
     const role = document.querySelector("#user-role-input").value;
-    if (!name || !email || !phone || !password) return;
+    const isActive = document.querySelector("#user-active-input").checked;
+    if (!name || !email || !phone || (!id && !password)) return;
 
-    if (password.length < 6) {
+    if (!id && password.length < 6) {
       alert("La contrasena debe tener minimo 6 caracteres.");
       return;
     }
 
     try {
-      await apiRequest("/users", {
-        method: "POST",
-        body: JSON.stringify({ name, email, phone, password, role }),
-      });
+      if (id) {
+        await apiRequest(`/users/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name, email, phone, role, isActive }),
+        });
+      } else {
+        await apiRequest("/users", {
+          method: "POST",
+          body: JSON.stringify({ name, email, phone, password, role }),
+        });
+      }
 
+      resetUserForm();
       await syncRemoteData({ force: true });
     } catch (error) {
       alert(error.message);
+    }
+  });
+
+  document.querySelector("#user-cancel-edit").addEventListener("click", resetUserForm);
+
+  document.querySelector("#user-search").addEventListener("input", renderUsersList);
+  document.querySelector("#user-role-filter").addEventListener("change", renderUsersList);
+  document.querySelector("#user-status-filter").addEventListener("change", renderUsersList);
+
+  document.querySelector("#users-list").addEventListener("click", async (event) => {
+    const editId = event.target.closest("[data-edit-user]")?.dataset.editUser;
+    const toggleId = event.target.closest("[data-toggle-user]")?.dataset.toggleUser;
+    const deleteId = event.target.closest("[data-delete-user]")?.dataset.deleteUser;
+
+    if (editId) {
+      const user = appState.users.find((item) => item.id === editId);
+      if (!user) return;
+
+      document.querySelector("#user-id-input").value = user.id;
+      document.querySelector("#user-name-input").value = user.name;
+      document.querySelector("#user-email-input").value = user.email;
+      document.querySelector("#user-phone-input").value = user.phone;
+      document.querySelector("#user-role-input").value = user.role;
+      document.querySelector("#user-active-input").checked = user.active;
+      document.querySelector("#user-password-input").value = "";
+      document.querySelector("#user-password-input").required = false;
+      document.querySelector("#user-password-label").classList.add("hidden");
+      document.querySelector("#user-form-kicker").textContent = "Edicion";
+      document.querySelector("#user-form-title").textContent = `Editar ${user.name}`;
+      document.querySelector("#user-submit-button").textContent = "Guardar cambios";
+      document.querySelector("#user-form").scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    if (toggleId) {
+      const user = appState.users.find((item) => item.id === toggleId);
+      if (!user) return;
+
+      try {
+        await apiRequest(`/users/${toggleId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ isActive: !user.active }),
+        });
+        await syncRemoteData({ force: true });
+      } catch (error) {
+        alert(error.message);
+      }
+      return;
+    }
+
+    if (deleteId) {
+      const user = appState.users.find((item) => item.id === deleteId);
+      if (!user || !confirm(`Eliminar a ${user.name}? Esta accion no se puede deshacer.`)) return;
+
+      try {
+        await apiRequest(`/users/${deleteId}`, { method: "DELETE" });
+        await syncRemoteData({ force: true });
+      } catch (error) {
+        alert(error.message);
+      }
     }
   });
 

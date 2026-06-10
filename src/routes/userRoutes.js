@@ -44,12 +44,25 @@ router.get("/", async (req, res) => {
 // Ruta para actualizar un usuario. Solo coordinadores.
 router.patch("/:id", validateObjectId("id"), async (req, res) => {
   try {
-    const user = await userService.updateUserById(req.params.id, req.body);
+    const user = await userService.updateUserById(req.params.id, req.body, getUserId(req.user));
     res.status(200).json({ ok: true, user });
   } catch (err) {
     res.status(err.statusCode || 400).json({
       ok: false,
       message: err.message || "No se pudo actualizar el usuario.",
+    });
+  }
+});
+
+// Ruta para eliminar un usuario registrado. Solo coordinadores.
+router.delete("/:id", validateObjectId("id"), async (req, res) => {
+  try {
+    const user = await userService.deleteUserById(req.params.id, getUserId(req.user));
+    res.status(200).json({ ok: true, user });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      ok: false,
+      message: err.message || "No se pudo eliminar el usuario.",
     });
   }
 });
