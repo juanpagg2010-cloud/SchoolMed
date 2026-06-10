@@ -40,6 +40,8 @@ let activeRole = fixedRole || currentUser.role || "Coordinador";
 let selectedGradeId = "";
 let emailDraft = null;
 let flashMessage = null;
+let coordinatorExcusePage = 1;
+const coordinatorExcusesPerPage = 5;
 const activeSectionByRole = {
   Coordinador: "coord-radar",
   Acudiente: "guardian-create",
@@ -537,9 +539,12 @@ function renderStats(items) {
 
 // Vista del coordinador: revision, usuarios, grados y comunicacion.
 function renderCoordinator() {
+  const totalExcuses = appState.excuses.length;
+  const pendingExcuses = appState.excuses.filter((item) => item.status === "PendienteRevision").length;
+
   renderStats([
     { value: appState.users.length, label: "Usuarios" },
-    { value: appState.excuses.filter((item) => item.status === "PendienteRevision").length, label: "Por revisar" },
+    { value: totalExcuses, label: "Excusas" },
     { value: appState.grades.length, label: "Grados" },
   ]);
 
@@ -555,9 +560,9 @@ function renderCoordinator() {
       ${sectionHeader("Radar institucional", "Una lectura rapida del estado actual del colegio.")}
       <div class="grid gap-4 lg:grid-cols-4">
         ${[
-          ["Revision prioritaria", `${appState.excuses.filter((item) => item.status === "PendienteRevision").length} excusas`, "bg-amber-300/15 text-amber-100"],
+          ["Excusas recibidas", `${totalExcuses} excusas`, "bg-amber-300/15 text-amber-100"],
           ["Familias activas", `${appState.users.filter((user) => user.role === "Acudiente" && user.active).length} acudientes`, "bg-emerald-300/15 text-emerald-100"],
-          ["Cursos cubiertos", `${appState.grades.length} grados`, "bg-cyan-300/15 text-cyan-100"],
+          ["Por revisar", `${pendingExcuses} pendientes`, "bg-cyan-300/15 text-cyan-100"],
           ["Trazabilidad", `${appState.feed.length} eventos`, "bg-fuchsia-300/15 text-fuchsia-100"],
         ].map(([title, value, tone], index) => `
           <article class="action-card stagger-item" style="--i:${index}">
@@ -707,14 +712,24 @@ function renderCoordinatorExcuses() {
     const text = `${excuse.student} ${excuse.guardian} ${excuse.grade} ${excuse.group}`.toLowerCase();
     return text.includes(search) && (status === "all" || excuse.status === status);
   });
+  const totalPages = Math.max(1, Math.ceil(rows.length / coordinatorExcusesPerPage));
+  coordinatorExcusePage = Math.min(Math.max(coordinatorExcusePage, 1), totalPages);
+  const startIndex = (coordinatorExcusePage - 1) * coordinatorExcusesPerPage;
+  const pageRows = rows.slice(startIndex, startIndex + coordinatorExcusesPerPage);
+  const pageButtons = Array.from({ length: totalPages }, (_, index) => index + 1)
+    .filter((page) => totalPages <= 5 || page === 1 || page === totalPages || Math.abs(page - coordinatorExcusePage) <= 1);
 
   table.innerHTML = `
+    <div class="flex flex-col gap-2 border-b border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-bold text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+      <span>${rows.length} excusas encontradas</span>
+      <span class="text-xs uppercase tracking-[0.16em] text-slate-500">Pagina ${coordinatorExcusePage} de ${totalPages}</span>
+    </div>
     <div class="hidden grid-cols-[1.1fr_1fr_0.55fr_0.7fr_1fr] gap-4 bg-white/[0.065] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500 lg:grid">
       <span>Estudiante</span><span>Padre</span><span>Grado</span><span>Estado</span><span>Accion</span>
     </div>
     <div class="grid gap-2 p-2">
-      ${rows.map((excuse) => `
-        <article class="stagger-item grid gap-3 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-4 transition duration-300 hover:-translate-y-0.5 hover:border-cyan-200/30 hover:bg-white/[0.07] lg:grid-cols-[1.1fr_1fr_0.55fr_0.7fr_1fr] lg:items-center" style="--i:${rows.indexOf(excuse)}">
+      ${pageRows.map((excuse, index) => `
+        <article class="stagger-item grid gap-3 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-4 transition duration-300 hover:-translate-y-0.5 hover:border-cyan-200/30 hover:bg-white/[0.07] lg:grid-cols-[1.1fr_1fr_0.55fr_0.7fr_1fr] lg:items-center" style="--i:${index}">
           <div>
             <p class="font-black text-white">${escapeHtml(excuse.student)}</p>
             <p class="text-sm font-semibold text-slate-400">${escapeHtml(excuse.reason)} - ${dateRange(excuse)}</p>
@@ -732,6 +747,19 @@ function renderCoordinatorExcuses() {
           </div>
         </article>
       `).join("") || `<p class="px-4 py-8 text-sm font-bold text-slate-400">No hay excusas con esos filtros.</p>`}
+    </div>
+    <div class="flex flex-col gap-3 border-t border-white/10 bg-white/[0.025] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-sm font-semibold text-slate-400">
+        ${rows.length ? `Mostrando ${startIndex + 1}-${Math.min(startIndex + coordinatorExcusesPerPage, rows.length)} de ${rows.length}` : "Sin resultados"}
+      </p>
+      <div class="flex flex-wrap items-center gap-2">
+        <button data-page-prev type="button" class="mini-action text-slate-200" ${coordinatorExcusePage === 1 ? "disabled" : ""}>Anterior</button>
+        ${pageButtons.map((page, index, pages) => `
+          ${index > 0 && page - pages[index - 1] > 1 ? `<span class="px-1 text-sm font-black text-slate-500">...</span>` : ""}
+          <button data-page="${page}" type="button" class="mini-action ${page === coordinatorExcusePage ? "border-cyan-200/50 bg-cyan-300/15 text-cyan-100" : "text-slate-200"}">${page}</button>
+        `).join("")}
+        <button data-page-next type="button" class="mini-action text-slate-200" ${coordinatorExcusePage === totalPages ? "disabled" : ""}>Siguiente</button>
+      </div>
     </div>
   `;
 }
@@ -957,11 +985,18 @@ function bindCoordinator() {
     }
   });
 
-  document.querySelector("#excuse-search").addEventListener("input", renderCoordinatorExcuses);
-  document.querySelector("#excuse-status-filter").addEventListener("change", renderCoordinatorExcuses);
+  document.querySelector("#excuse-search").addEventListener("input", () => {
+    coordinatorExcusePage = 1;
+    renderCoordinatorExcuses();
+  });
+  document.querySelector("#excuse-status-filter").addEventListener("change", () => {
+    coordinatorExcusePage = 1;
+    renderCoordinatorExcuses();
+  });
   document.querySelector("#clear-filters").addEventListener("click", () => {
     document.querySelector("#excuse-search").value = "";
     document.querySelector("#excuse-status-filter").value = "all";
+    coordinatorExcusePage = 1;
     renderCoordinatorExcuses();
   });
 
@@ -978,6 +1013,18 @@ function bindCoordinator() {
   document.querySelector("#stop-qr-scan").addEventListener("click", stopValidationScanner);
 
   document.querySelector("#excuse-table").addEventListener("click", (event) => {
+    const pageButton = event.target.closest("[data-page]");
+    const previousButton = event.target.closest("[data-page-prev]");
+    const nextButton = event.target.closest("[data-page-next]");
+
+    if (pageButton || previousButton || nextButton) {
+      if (pageButton) coordinatorExcusePage = Number(pageButton.dataset.page);
+      if (previousButton) coordinatorExcusePage -= 1;
+      if (nextButton) coordinatorExcusePage += 1;
+      renderCoordinatorExcuses();
+      return;
+    }
+
     const approveButton = event.target.closest("[data-approve]");
     const rejectButton = event.target.closest("[data-reject]");
     const approveId = approveButton?.dataset.approve;
