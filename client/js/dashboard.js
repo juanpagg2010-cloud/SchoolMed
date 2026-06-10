@@ -42,6 +42,10 @@ let emailDraft = null;
 let flashMessage = null;
 let coordinatorExcusePage = 1;
 const coordinatorExcusesPerPage = 5;
+let teacherGradePage = 1;
+let teacherExcusePage = 1;
+const teacherGradesPerPage = 5;
+const teacherExcusesPerPage = 3;
 const activeSectionByRole = {
   Coordinador: "coord-radar",
   Acudiente: "guardian-create",
@@ -764,6 +768,31 @@ function renderCoordinatorExcuses() {
   `;
 }
 
+function paginationControls({ currentPage, label, prefix, totalItems, totalPages }) {
+  if (totalPages <= 1) {
+    return totalItems
+      ? `<p class="mt-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">${label}: ${totalItems}</p>`
+      : "";
+  }
+
+  const pages = Array.from({ length: totalPages }, (_, index) => index + 1)
+    .filter((page) => totalPages <= 5 || page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1);
+
+  return `
+    <div class="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">${label}: ${totalItems} · Pagina ${currentPage}/${totalPages}</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <button data-${prefix}-prev type="button" class="mini-action text-slate-200" ${currentPage === 1 ? "disabled" : ""}>Anterior</button>
+        ${pages.map((page, index) => `
+          ${index > 0 && page - pages[index - 1] > 1 ? `<span class="px-1 text-sm font-black text-slate-500">...</span>` : ""}
+          <button data-${prefix}-page="${page}" type="button" class="mini-action ${page === currentPage ? "border-cyan-200/50 bg-cyan-300/15 text-cyan-100" : "text-slate-200"}">${page}</button>
+        `).join("")}
+        <button data-${prefix}-next type="button" class="mini-action text-slate-200" ${currentPage === totalPages ? "disabled" : ""}>Siguiente</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderValidationResult() {
   const container = document.querySelector("#validation-result");
   if (!container) return;
@@ -1315,6 +1344,18 @@ function renderTeacher() {
   const gradeExcuses = selectedGrade
     ? activeExcuses.filter((excuse) => excuse.grade === selectedGrade.name && excuse.group === selectedGrade.group)
     : [];
+  const gradeTotalPages = Math.max(1, Math.ceil(appState.grades.length / teacherGradesPerPage));
+  const excuseTotalPages = Math.max(1, Math.ceil(gradeExcuses.length / teacherExcusesPerPage));
+  teacherGradePage = Math.min(Math.max(teacherGradePage, 1), gradeTotalPages);
+  teacherExcusePage = Math.min(Math.max(teacherExcusePage, 1), excuseTotalPages);
+  const visibleGrades = appState.grades.slice(
+    (teacherGradePage - 1) * teacherGradesPerPage,
+    teacherGradePage * teacherGradesPerPage,
+  );
+  const visibleGradeExcuses = gradeExcuses.slice(
+    (teacherExcusePage - 1) * teacherExcusesPerPage,
+    teacherExcusePage * teacherExcusesPerPage,
+  );
 
   renderStats([
     { value: appState.grades.length, label: "Grados" },
@@ -1354,7 +1395,7 @@ function renderTeacher() {
       <div>
         ${sectionHeader("Grados del colegio", "Selecciona un curso para ver estudiantes con excusa vigente.")}
         <div id="teacher-grades" class="grid gap-3">
-          ${appState.grades.map((grade) => {
+          ${visibleGrades.map((grade) => {
             const count = activeExcuses.filter((excuse) => excuse.grade === grade.name && excuse.group === grade.group).length;
             const selected = grade.id === selectedGrade?.id;
             return `
@@ -1368,12 +1409,19 @@ function renderTeacher() {
             `;
           }).join("") || emptyState("Aun no hay grados disponibles.")}
         </div>
+        ${paginationControls({
+          currentPage: teacherGradePage,
+          label: "Grados",
+          prefix: "teacher-grade",
+          totalItems: appState.grades.length,
+          totalPages: gradeTotalPages,
+        })}
       </div>
 
       <div>
         ${sectionHeader(selectedGrade ? `Excusas vigentes - ${escapeHtml(selectedGrade.name)} ${escapeHtml(selectedGrade.group)}` : "Excusas vigentes", "Esta vista se actualiza cuando coordinacion acepta una excusa.")}
         <div id="teacher-excuses" class="grid gap-4">
-          ${gradeExcuses.map((excuse, index) => `
+          ${visibleGradeExcuses.map((excuse, index) => `
             <article class="action-card stagger-item grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start" style="--i:${index}">
               <div>
                 <div class="flex flex-wrap items-center gap-3">
@@ -1387,6 +1435,13 @@ function renderTeacher() {
             </article>
           `).join("") || emptyState(selectedGrade ? "Este grado no tiene excusas medicas vigentes." : "Selecciona un grado cuando coordinacion lo haya creado.")}
         </div>
+        ${paginationControls({
+          currentPage: teacherExcusePage,
+          label: "Excusas",
+          prefix: "teacher-excuse",
+          totalItems: gradeExcuses.length,
+          totalPages: excuseTotalPages,
+        })}
       </div>
       </div>
     </section>
@@ -1403,12 +1458,37 @@ function renderTeacher() {
     const button = event.target.closest("[data-grade]");
     if (!button) return;
     selectedGradeId = button.dataset.grade;
+    teacherExcusePage = 1;
     render();
+  });
+
+  document.querySelector("#teacher-grade").addEventListener("click", (event) => {
+    const gradePage = event.target.closest("[data-teacher-grade-page]");
+    const gradePrev = event.target.closest("[data-teacher-grade-prev]");
+    const gradeNext = event.target.closest("[data-teacher-grade-next]");
+    const excusePage = event.target.closest("[data-teacher-excuse-page]");
+    const excusePrev = event.target.closest("[data-teacher-excuse-prev]");
+    const excuseNext = event.target.closest("[data-teacher-excuse-next]");
+
+    if (gradePage || gradePrev || gradeNext) {
+      if (gradePage) teacherGradePage = Number(gradePage.dataset.teacherGradePage);
+      if (gradePrev) teacherGradePage -= 1;
+      if (gradeNext) teacherGradePage += 1;
+      render();
+    }
+
+    if (excusePage || excusePrev || excuseNext) {
+      if (excusePage) teacherExcusePage = Number(excusePage.dataset.teacherExcusePage);
+      if (excusePrev) teacherExcusePage -= 1;
+      if (excuseNext) teacherExcusePage += 1;
+      render();
+    }
   });
 
   document.querySelectorAll("[data-grade-jump]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedGradeId = button.dataset.gradeJump;
+      teacherExcusePage = 1;
       activeSectionByRole.Profesor = "teacher-grade";
       render();
     });
