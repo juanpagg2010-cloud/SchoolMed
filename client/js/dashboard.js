@@ -65,7 +65,6 @@ const statusLabels = {
   Aprobada: "Aceptada",
   Rechazada: "Rechazada",
   PendienteRevision: "Por revisar",
-  PendienteVerificacion: "Por verificar",
 };
 
 // Estilos de cada estado de excusa.
@@ -73,7 +72,6 @@ const statusClasses = {
   Aprobada: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
   Rechazada: "border-red-400/30 bg-red-400/10 text-red-200",
   PendienteRevision: "border-amber-300/30 bg-amber-300/10 text-amber-100",
-  PendienteVerificacion: "border-sky-300/30 bg-sky-300/10 text-sky-100",
 };
 
 // Puntos de color dentro de cada badge de estado.
@@ -81,7 +79,6 @@ const statusDots = {
   Aprobada: "bg-emerald-300 shadow-emerald-300/40",
   Rechazada: "bg-red-300 shadow-red-300/40",
   PendienteRevision: "bg-amber-200 shadow-amber-200/40",
-  PendienteVerificacion: "bg-sky-200 shadow-sky-200/40",
 };
 
 // Gradientes de acento por rol.
@@ -966,23 +963,8 @@ function renderGuardian() {
       formData.append("fechaFin", get("end"));
       if (support) formData.append("archivo", support);
 
-      const created = await apiFormRequest("/medical-excuses", formData, { method: "POST" });
-
-      let excuse = created.excusa;
-      alert("Excusa creada. Te enviamos un codigo al correo para confirmar el envio a coordinacion.");
-      const code = prompt("Escribe el codigo recibido para mandar la excusa al coordinador.");
-
-      if (code?.trim()) {
-        const verified = await apiRequest(`/medical-excuses/${excuse._id || excuse.id}/verify-code`, {
-          method: "POST",
-          body: JSON.stringify({ codigo: code.trim() }),
-        });
-        excuse = verified.excusa;
-        alert("Excusa medica creada y enviada al coordinador para revision.");
-      } else {
-        alert("La excusa quedo creada, pero aun no fue enviada al coordinador. Debes verificar el codigo del correo.");
-      }
-
+      await apiFormRequest("/medical-excuses", formData, { method: "POST" });
+      alert("Excusa medica creada y enviada al coordinador para revision.");
       activeSectionByRole.Acudiente = "guardian-track";
       await syncRemoteData({ force: true });
     } catch (error) {

@@ -25,7 +25,7 @@ router.use(protect);
 // Ruta para crear una excusa medica. Solo acudientes.
 router.post("/", authorizeRoles(GUARDIAN), uploadMedicalSupport.single("archivo"), async (req, res) => {
   try {
-    const { emailResult, excusa } = await medicalExcuseService.createMedicalExcuse(
+    const { excusa } = await medicalExcuseService.createMedicalExcuse(
       getUserId(req.user),
       req.user.email,
       req.body,
@@ -34,8 +34,7 @@ router.post("/", authorizeRoles(GUARDIAN), uploadMedicalSupport.single("archivo"
 
     res.status(201).json({
       ok: true,
-      message: "Excusa medica creada. Verifica el codigo enviado al correo del acudiente.",
-      emailSent: emailResult.sent,
+      message: "Excusa medica creada y enviada a coordinacion para revision.",
       excusa,
     });
   } catch (err) {
@@ -181,116 +180,6 @@ router.get("/teacher", authorizeRoles(TEACHER, COORDINATOR), async (req, res) =>
     });
   }
 });
-
-// Ruta para verificar el codigo enviado al correo del acudiente.
-router.post(
-  "/:id/verification",
-  authorizeRoles(GUARDIAN),
-  validateObjectId("id"),
-  async (req, res) => {
-    try {
-      const excusa = await medicalExcuseService.verifyMedicalExcuseCode(
-        req.params.id,
-        getUserId(req.user),
-        req.body.codigo,
-      );
-
-      res.status(200).json({
-        ok: true,
-        message: "Excusa medica verificada y enviada a revision.",
-        excusa,
-      });
-    } catch (err) {
-      res.status(err.statusCode || 400).json({
-        ok: false,
-        message: err.message || "No se pudo verificar la excusa medica.",
-      });
-    }
-  },
-);
-
-// Ruta para reenviar el codigo de verificacion al acudiente.
-router.post(
-  "/:id/verification/resend",
-  authorizeRoles(GUARDIAN),
-  validateObjectId("id"),
-  async (req, res) => {
-    try {
-      const { emailResult, excusa } = await medicalExcuseService.resendMedicalExcuseCode(
-        req.params.id,
-        getUserId(req.user),
-        req.user.email,
-      );
-
-      res.status(200).json({
-        ok: true,
-        message: "Codigo de verificacion reenviado.",
-        emailSent: emailResult.sent,
-        excusa,
-      });
-    } catch (err) {
-      res.status(err.statusCode || 400).json({
-        ok: false,
-        message: err.message || "No se pudo reenviar el codigo de verificacion.",
-      });
-    }
-  },
-);
-
-// Alias para verificar codigo.
-router.post(
-  "/:id/verify-code",
-  authorizeRoles(GUARDIAN),
-  validateObjectId("id"),
-  async (req, res) => {
-    try {
-      const excusa = await medicalExcuseService.verifyMedicalExcuseCode(
-        req.params.id,
-        getUserId(req.user),
-        req.body.codigo,
-      );
-
-      res.status(200).json({
-        ok: true,
-        message: "Excusa medica verificada y enviada a revision.",
-        excusa,
-      });
-    } catch (err) {
-      res.status(err.statusCode || 400).json({
-        ok: false,
-        message: err.message || "No se pudo verificar la excusa medica.",
-      });
-    }
-  },
-);
-
-// Alias para reenviar codigo.
-router.post(
-  "/:id/resend-code",
-  authorizeRoles(GUARDIAN),
-  validateObjectId("id"),
-  async (req, res) => {
-    try {
-      const { emailResult, excusa } = await medicalExcuseService.resendMedicalExcuseCode(
-        req.params.id,
-        getUserId(req.user),
-        req.user.email,
-      );
-
-      res.status(200).json({
-        ok: true,
-        message: "Codigo de verificacion reenviado.",
-        emailSent: emailResult.sent,
-        excusa,
-      });
-    } catch (err) {
-      res.status(err.statusCode || 400).json({
-        ok: false,
-        message: err.message || "No se pudo reenviar el codigo de verificacion.",
-      });
-    }
-  },
-);
 
 // Ruta para aprobar una excusa medica. Solo coordinadores.
 router.patch("/:id/approve", authorizeRoles(COORDINATOR), validateObjectId("id"), async (req, res) => {

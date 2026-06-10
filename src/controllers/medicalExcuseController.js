@@ -5,18 +5,16 @@ import {
   getGuardianExcuses,
   getMedicalExcuseById,
   getTeacherExcuses,
-  resendMedicalExcuseCode,
   reviewMedicalExcuse,
-  verifyMedicalExcuseCode,
 } from "../services/medicalExcuseService.js";
 
 const isGuardian = (user) => user?.role === "Acudiente";
 const getUserId = (user) => user?._id || user?.id;
 
-// Controlador para crear una excusa y disparar el codigo de verificacion.
+// Controlador para crear una excusa y enviarla directamente a coordinacion.
 export const crearExcusaMedica = async (req, res) => {
   try {
-    const { emailResult, excusa } = await createMedicalExcuse(
+    const { excusa } = await createMedicalExcuse(
       getUserId(req.user),
       req.user.email,
       req.body,
@@ -25,55 +23,13 @@ export const crearExcusaMedica = async (req, res) => {
 
     return res.status(201).json({
       ok: true,
-      message: "Excusa medica creada. Verifica el codigo enviado al correo del acudiente.",
-      emailSent: emailResult.sent,
+      message: "Excusa medica creada y enviada a coordinacion para revision.",
       excusa,
     });
   } catch (error) {
     return res.status(error.statusCode || 400).json({
       ok: false,
       message: error.message || "No se pudo crear la excusa medica.",
-    });
-  }
-};
-
-// Controlador para validar el codigo enviado al correo del acudiente.
-export const verificarCodigoExcusa = async (req, res) => {
-  try {
-    const excusa = await verifyMedicalExcuseCode(req.params.id, getUserId(req.user), req.body.codigo);
-
-    return res.json({
-      ok: true,
-      message: "Excusa medica verificada y enviada a revision.",
-      excusa,
-    });
-  } catch (error) {
-    return res.status(error.statusCode || 400).json({
-      ok: false,
-      message: error.message || "No se pudo verificar la excusa medica.",
-    });
-  }
-};
-
-// Controlador para reenviar un codigo de verificacion.
-export const reenviarCodigoExcusa = async (req, res) => {
-  try {
-    const { emailResult, excusa } = await resendMedicalExcuseCode(
-      req.params.id,
-      getUserId(req.user),
-      req.user.email,
-    );
-
-    return res.json({
-      ok: true,
-      message: "Codigo de verificacion reenviado.",
-      emailSent: emailResult.sent,
-      excusa,
-    });
-  } catch (error) {
-    return res.status(error.statusCode || 400).json({
-      ok: false,
-      message: error.message || "No se pudo reenviar el codigo de verificacion.",
     });
   }
 };
@@ -175,7 +131,7 @@ export const obtenerExcusaPorId = async (req, res) => {
   }
 };
 
-// Controlador para aprobar una excusa verificada.
+// Controlador para aprobar una excusa revisada.
 export const aprobarExcusa = async (req, res) => {
   try {
     const excusa = await reviewMedicalExcuse(req.params.id, getUserId(req.user), {
@@ -197,7 +153,7 @@ export const aprobarExcusa = async (req, res) => {
   }
 };
 
-// Controlador para rechazar una excusa verificada.
+// Controlador para rechazar una excusa revisada.
 export const rechazarExcusa = async (req, res) => {
   try {
     const { motivoRechazo } = req.body;
@@ -227,7 +183,7 @@ export const rechazarExcusa = async (req, res) => {
   }
 };
 
-// Controlador para cancelar una excusa verificada.
+// Controlador para cancelar una excusa revisada.
 export const cancelarExcusa = async (req, res) => {
   try {
     const { motivoCancelacion } = req.body;
@@ -259,8 +215,6 @@ export const cancelarExcusa = async (req, res) => {
 
 export default {
   crearExcusaMedica,
-  verificarCodigoExcusa,
-  reenviarCodigoExcusa,
   obtenerMisExcusas,
   obtenerExcusasParaCoordinador,
   obtenerExcusasPorGrado,
