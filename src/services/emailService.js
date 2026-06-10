@@ -85,7 +85,27 @@ export const sendMedicalExcuseReviewResult = async ({
   return { sent: true };
 };
 
+// Envia correos manuales desde coordinacion usando el mismo proveedor SMTP.
+export const sendManualEmail = async ({ body, subject, to }) => {
+  const transporter = getTransporter();
+
+  if (!transporter) {
+    console.warn("SMTP no configurado. No se envio correo manual.");
+    return { sent: false, reason: "SMTP no configurado" };
+  }
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM || process.env.SMTP_USER,
+    to,
+    subject,
+    text: body,
+  });
+
+  return { sent: true };
+};
+
 export default {
+  sendManualEmail,
   sendMedicalExcuseReviewResult,
   sendMedicalExcuseVerificationCode,
 };

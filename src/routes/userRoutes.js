@@ -6,6 +6,7 @@ import * as userService from "../services/userService.js";
 
 const router = Router();
 const COORDINATOR = "Coordinador";
+const getUserId = (user) => user?._id || user?.id;
 
 router.use(protect);
 router.use(authorizeRoles(COORDINATOR));
@@ -13,7 +14,7 @@ router.use(authorizeRoles(COORDINATOR));
 // Ruta para crear usuarios desde coordinacion. El admin define la contrasena inicial.
 router.post("/", async (req, res) => {
   try {
-    const user = await userService.createUserByAdmin(req.body);
+    const user = await userService.createUserByAdmin(req.body, getUserId(req.user));
     res.status(201).json({ ok: true, user });
   } catch (err) {
     res.status(err.statusCode || 400).json({

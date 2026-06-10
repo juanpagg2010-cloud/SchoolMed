@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import User from "../models/userModel.js";
+import { createActivity } from "./activityService.js";
 import { VALID_ROLES } from "./authService.js";
 
 const removePassword = (user) => {
@@ -9,7 +10,7 @@ const removePassword = (user) => {
 };
 
 // Crea usuarios desde el panel de coordinacion con contrasena inicial definida por el admin.
-export const createUserByAdmin = async ({ name, email, password, role, phone }) => {
+export const createUserByAdmin = async ({ name, email, password, role, phone }, actorId) => {
   if (!name || !email || !password || !role || !phone) {
     const error = new Error("Nombre, correo, contrasena, rol y telefono son obligatorios.");
     error.statusCode = 400;
@@ -39,6 +40,13 @@ export const createUserByAdmin = async ({ name, email, password, role, phone }) 
     password: encryptedPassword,
     role,
     phone,
+  });
+
+  await createActivity({
+    actorId,
+    message: `${user.name} fue creado como ${user.role}.`,
+    metadata: { role: user.role, userId: user._id },
+    type: "Usuario",
   });
 
   return removePassword(user);

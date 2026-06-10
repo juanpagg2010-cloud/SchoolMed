@@ -8,12 +8,14 @@ import routes from "./routes/index.js";
 const app = express();
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const clientPath = join(__dirname, "..", "client");
+const uploadsPath = join(__dirname, "..", "uploads");
 
 // Middlewares globales para recibir JSON, formularios y peticiones desde otros origenes.
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(clientPath));
+app.use("/uploads", express.static(uploadsPath));
 
 // Ruta base para comprobar rapidamente que la API esta viva.
 app.get("/", (req, res) => {

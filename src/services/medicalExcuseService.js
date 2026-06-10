@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import MedicalExcuse from "../models/medicalExcuse.js";
+import { createActivity } from "./activityService.js";
 import {
   sendMedicalExcuseReviewResult,
   sendMedicalExcuseVerificationCode,
@@ -132,6 +133,13 @@ export const createMedicalExcuse = async (userId, userEmail, payload, file) => {
 
   const publicExcuse = await MedicalExcuse.findById(excusa._id);
 
+  await createActivity({
+    actorId: userId,
+    message: `Se radico una excusa para ${nombreEstudiante}.`,
+    metadata: { excuseId: excusa._id, status: excusa.estado },
+    type: "Excusa",
+  });
+
   return { excusa: publicExcuse, emailResult };
 };
 
@@ -240,6 +248,17 @@ export const reviewMedicalExcuse = async (id, coordinatorId, review) => {
 
   const emailNotification = await notifyGuardianReviewResult(excusa);
 
+  await createActivity({
+    actorId: coordinatorId,
+    message: `${excusa.nombreEstudiante} fue ${excusa.estado === "Aprobada" ? "aprobada" : "rechazada"} por coordinacion.`,
+    metadata: {
+      emailNotification,
+      excuseId: excusa._id,
+      status: excusa.estado,
+    },
+    type: "Excusa",
+  });
+
   return {
     ...excusa.toObject(),
     emailNotification,
@@ -302,6 +321,13 @@ export const verifyMedicalExcuseCode = async (id, userId, code) => {
   excusa.estado = "PendienteRevision";
   excusa.verificacion.verificadoEn = new Date();
   await excusa.save();
+
+  await createActivity({
+    actorId: userId,
+    message: `La excusa de ${excusa.nombreEstudiante} fue verificada y enviada a revision.`,
+    metadata: { excuseId: excusa._id, status: excusa.estado },
+    type: "Excusa",
+  });
 
   return getMedicalExcuseById(id);
 };

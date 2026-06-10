@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { protect } from "../middlewares/authMiddleware.js";
 import { authorizeRoles } from "../middlewares/roleMiddleware.js";
+import { uploadMedicalSupport } from "../middlewares/uploadMiddleware.js";
 import validateObjectId from "../middlewares/validateObjectId.js";
 import * as medicalExcuseService from "../services/medicalExcuseService.js";
 
@@ -22,7 +23,7 @@ const canReadExcuse = (user, excuse) => {
 router.use(protect);
 
 // Ruta para crear una excusa medica. Solo acudientes.
-router.post("/", authorizeRoles(GUARDIAN), async (req, res) => {
+router.post("/", authorizeRoles(GUARDIAN), uploadMedicalSupport.single("archivo"), async (req, res) => {
   try {
     const { emailResult, excusa } = await medicalExcuseService.createMedicalExcuse(
       getUserId(req.user),

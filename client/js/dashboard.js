@@ -1,5 +1,3 @@
-const stateKey = "schoolmed_dashboard_state_v2";
-
 // Datos de sesion guardados despues del login.
 const sessionUser = JSON.parse(localStorage.getItem("schoolmed_user") || "null");
 const sessionToken = localStorage.getItem("schoolmed_token");
@@ -40,6 +38,7 @@ const currentUser = sessionUser || {
 const fixedRole = document.body.dataset.dashboardRole || "";
 let activeRole = fixedRole || currentUser.role || "Coordinador";
 let selectedGradeId = "";
+let emailDraft = null;
 const activeSectionByRole = {
   Coordinador: "coord-radar",
   Acudiente: "guardian-create",
@@ -47,7 +46,7 @@ const activeSectionByRole = {
 };
 const appState = loadState();
 const apiBaseUrl = "/api/v1";
-const syncedRoles = new Set();
+let hasSyncedRemoteData = false;
 let isSyncingRemoteData = false;
 
 // Referencias a regiones dinamicas del dashboard.
@@ -92,11 +91,8 @@ const roleAccent = {
   Profesor: "from-sky-200 via-cyan-200 to-emerald-100",
 };
 
-// Carga estado local usado por el dashboard demostrativo.
+// Estado en memoria; los datos persistentes vienen de MongoDB por API.
 function loadState() {
-  const saved = JSON.parse(localStorage.getItem(stateKey) || "null");
-  if (saved) return saved;
-
   return {
     grades: [],
     users: [],
@@ -105,9 +101,8 @@ function loadState() {
   };
 }
 
-// Persiste cambios del dashboard demostrativo en localStorage.
+// Conserva compatibilidad con flujos existentes; ya no persiste datos de negocio localmente.
 function saveState() {
-  localStorage.setItem(stateKey, JSON.stringify(appState));
 }
 
 // Escapa texto antes de insertarlo en HTML para evitar inyecciones.
@@ -149,6 +144,53 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
+// Helper para subir formularios multipart sin forzar Content-Type manual.
+async function apiFormRequest(path, formData, options = {}) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    ...options,
+    body: formData,
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.message || "No se pudo completar la solicitud.");
+  }
+
+  return data;
+}
+
+// Adapta usuarios de MongoDB al formato del dashboard.
+function mapUserFromApi(user) {
+  return {
+    id: user._id || user.id,
+    active: user.isActive,
+    email: user.email || "",
+    name: user.name || "",
+    phone: user.phone || "",
+    role: user.role || "Acudiente",
+  };
+}
+
+// Adapta grados de MongoDB al formato del dashboard.
+function mapGradeFromApi(grade) {
+  return {
+    id: grade._id || grade.id,
+    group: grade.group || "",
+    name: grade.name || "",
+    students: grade.students || 0,
+    teacher: grade.teacher || "",
+  };
+}
+
+// Adapta movimientos de MongoDB a texto visible.
+function mapActivityFromApi(activity) {
+  return activity.message || "Movimiento registrado.";
+}
+
 // Adapta una excusa de MongoDB al formato que usa el dashboard visual.
 function mapExcuseFromApi(excuse) {
   const guardian = excuse.acudienteId || {};
@@ -172,45 +214,37 @@ function mapExcuseFromApi(excuse) {
   };
 }
 
-// Inserta o actualiza excusas remotas sin duplicarlas en localStorage.
-function upsertRemoteExcuses(excuses = []) {
-  const mapped = excuses.map(mapExcuseFromApi).filter((excuse) => excuse.id);
-
-  mapped.forEach((remoteExcuse) => {
-    const index = appState.excuses.findIndex((item) => item.id === remoteExcuse.id);
-
-    if (index >= 0) {
-      appState.excuses[index] = { ...appState.excuses[index], ...remoteExcuse };
-      return;
-    }
-
-    appState.excuses.unshift(remoteExcuse);
-  });
-
-  saveState();
-}
-
-// Carga excusas reales desde la API segun el rol activo.
-async function syncRemoteExcuses(role) {
-  if (!sessionToken || syncedRoles.has(role) || isSyncingRemoteData) return;
+// Carga todos los datos persistentes que necesita el rol actual.
+async function syncRemoteData({ force = false } = {}) {
+  if (!sessionToken || isSyncingRemoteData || (hasSyncedRemoteData && !force)) return;
 
   const pathsByRole = {
     Acudiente: "/medical-excuses/me",
     Coordinador: "/medical-excuses/review",
     Profesor: "/medical-excuses/classroom",
   };
-  const path = pathsByRole[role];
+  const path = pathsByRole[activeRole];
   if (!path) return;
 
   isSyncingRemoteData = true;
 
   try {
-    const data = await apiRequest(path);
-    upsertRemoteExcuses(data.excusas || []);
-    syncedRoles.add(role);
+    const requests = [
+      apiRequest(path),
+      activeRole !== "Acudiente" ? apiRequest("/grades") : Promise.resolve({ grades: [] }),
+      activeRole !== "Acudiente" ? apiRequest("/activities") : Promise.resolve({ activities: [] }),
+      activeRole === "Coordinador" ? apiRequest("/users") : Promise.resolve({ users: [] }),
+    ];
+    const [excuseData, gradeData, activityData, userData] = await Promise.all(requests);
+
+    appState.excuses = (excuseData.excusas || []).map(mapExcuseFromApi);
+    appState.grades = (gradeData.grades || []).map(mapGradeFromApi);
+    appState.feed = (activityData.activities || []).map(mapActivityFromApi);
+    appState.users = (userData.users || []).map(mapUserFromApi);
+    hasSyncedRemoteData = true;
     render();
   } catch (error) {
-    console.warn(`No se pudieron sincronizar excusas de ${role}: ${error.message}`);
+    console.warn(`No se pudieron sincronizar datos: ${error.message}`);
   } finally {
     isSyncingRemoteData = false;
   }
@@ -499,12 +533,15 @@ function renderCoordinator() {
             <form id="email-form" class="grid gap-4">
               <label class="grid gap-2 text-sm font-bold text-slate-300">Destinatario
                 <select id="email-to" class="field">
+                  ${emailDraft ? `<option value="${escapeHtml(emailDraft.to)}">${escapeHtml(emailDraft.to)}</option>` : ""}
                   ${appState.users.filter((user) => user.role === "Acudiente").map((user) => `<option value="${escapeHtml(user.email)}">${escapeHtml(user.name)} - ${escapeHtml(user.email)}</option>`).join("") || `<option value="">Crea primero un acudiente</option>`}
                 </select>
               </label>
-              ${field("Asunto", "email-subject", "text", "Revision de excusa medica")}
+              <label class="grid gap-2 text-sm font-bold text-slate-300">Asunto
+                <input id="email-subject" type="text" class="field" value="${escapeHtml(emailDraft?.subject || "")}" placeholder="Revision de excusa medica" />
+              </label>
               <label class="grid gap-2 text-sm font-bold text-slate-300">Mensaje
-                <textarea id="email-message" rows="4" class="field resize-none" placeholder="Escribe el mensaje para la familia"></textarea>
+                <textarea id="email-message" rows="4" class="field resize-none" placeholder="Escribe el mensaje para la familia">${escapeHtml(emailDraft?.body || "")}</textarea>
               </label>
               <button class="primary-action" type="submit">Preparar correo</button>
             </form>
@@ -575,7 +612,7 @@ function renderCoordinatorExcuses() {
           <div class="flex flex-wrap gap-2">
             <button data-approve="${excuse.id}" type="button" class="mini-action text-emerald-100">Aceptar</button>
             <button data-reject="${excuse.id}" type="button" class="mini-action text-red-100">Rechazar</button>
-            <a class="mini-action text-sky-100" href="mailto:${escapeHtml(excuse.email)}?subject=SchoolMed - ${encodeURIComponent(excuse.student)}">Correo</a>
+            <button data-email-fill="${escapeHtml(excuse.email)}" data-email-student="${escapeHtml(excuse.student)}" type="button" class="mini-action text-sky-100">Correo</button>
           </div>
         </article>
       `).join("") || `<p class="px-4 py-8 text-sm font-bold text-slate-400">No hay excusas con esos filtros.</p>`}
@@ -600,46 +637,41 @@ function bindCoordinator() {
     }
 
     try {
-      const { user } = await apiRequest("/users", {
+      await apiRequest("/users", {
         method: "POST",
         body: JSON.stringify({ name, email, phone, password, role }),
       });
 
-      appState.users.unshift({
-        id: user._id || user.id || crypto.randomUUID(),
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        active: user.isActive,
-      });
-      appState.feed.unshift(`${user.name} fue creado como ${user.role}.`);
-      saveState();
-      render();
+      await syncRemoteData({ force: true });
     } catch (error) {
       alert(error.message);
     }
   });
 
-  document.querySelector("#add-grade").addEventListener("click", () => {
+  document.querySelector("#add-grade").addEventListener("click", async () => {
     const name = prompt("Nombre del grado");
     if (!name) return;
     const group = prompt("Grupo") || "";
     const teacher = prompt("Profesor asignado") || "";
     const students = Number(prompt("Cantidad de estudiantes") || 0);
-    appState.grades.unshift({
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      group: group.trim().toUpperCase(),
-      teacher: teacher.trim(),
-      students: Number.isNaN(students) ? 0 : students,
-    });
-    appState.feed.unshift(`Se agrego el grado ${name.trim()}${group ? ` ${group.trim().toUpperCase()}` : ""}.`);
-    saveState();
-    render();
+
+    try {
+      await apiRequest("/grades", {
+        method: "POST",
+        body: JSON.stringify({
+          group: group.trim().toUpperCase(),
+          name: name.trim(),
+          students: Number.isNaN(students) ? 0 : students,
+          teacher: teacher.trim(),
+        }),
+      });
+      await syncRemoteData({ force: true });
+    } catch (error) {
+      alert(error.message);
+    }
   });
 
-  document.querySelector("#grades-list").addEventListener("click", (event) => {
+  document.querySelector("#grades-list").addEventListener("click", async (event) => {
     const editId = event.target.closest("[data-edit-grade]")?.dataset.editGrade;
     const deleteId = event.target.closest("[data-delete-grade]")?.dataset.deleteGrade;
 
@@ -648,19 +680,30 @@ function bindCoordinator() {
       const name = prompt("Nombre del grado", grade.name);
       const group = prompt("Grupo", grade.group);
       if (name && group) {
-        grade.name = name;
-        grade.group = group.toUpperCase();
-        appState.feed.unshift(`Se actualizo el grado ${grade.name} ${grade.group}.`);
-        saveState();
-        render();
+        try {
+          await apiRequest(`/grades/${editId}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              group: group.toUpperCase(),
+              name,
+              students: grade.students,
+              teacher: grade.teacher,
+            }),
+          });
+          await syncRemoteData({ force: true });
+        } catch (error) {
+          alert(error.message);
+        }
       }
     }
 
     if (deleteId) {
-      appState.grades = appState.grades.filter((item) => item.id !== deleteId);
-      appState.feed.unshift("Coordinacion retiro un grado del sistema.");
-      saveState();
-      render();
+      try {
+        await apiRequest(`/grades/${deleteId}`, { method: "DELETE" });
+        await syncRemoteData({ force: true });
+      } catch (error) {
+        alert(error.message);
+      }
     }
   });
 
@@ -687,7 +730,7 @@ function bindCoordinator() {
           const data = await apiRequest(`/medical-excuses/${id}/approve`, { method: "PATCH" });
           excuse.status = "Aprobada";
           const sent = data.excusa?.emailNotification?.sent;
-          appState.feed.unshift(`${excuse.student} fue aceptada por coordinacion.${sent ? " Se notifico al acudiente por correo." : " No se pudo confirmar el envio del correo."}`);
+          alert(sent ? "Excusa aprobada y correo enviado." : "Excusa aprobada, pero no se pudo confirmar el correo.");
         } else {
           const motivoRechazo = prompt("Escribe el motivo del rechazo");
 
@@ -702,11 +745,10 @@ function bindCoordinator() {
           });
           excuse.status = "Rechazada";
           const sent = data.excusa?.emailNotification?.sent;
-          appState.feed.unshift(`${excuse.student} fue rechazada por coordinacion.${sent ? " Se notifico al acudiente por correo." : " No se pudo confirmar el envio del correo."}`);
+          alert(sent ? "Excusa rechazada y correo enviado." : "Excusa rechazada, pero no se pudo confirmar el correo.");
         }
 
-        saveState();
-        render();
+        await syncRemoteData({ force: true });
       } catch (error) {
         alert(`No se pudo actualizar la excusa: ${error.message}`);
       }
@@ -715,13 +757,37 @@ function bindCoordinator() {
     reviewExcuse();
   });
 
-  document.querySelector("#email-form").addEventListener("submit", (event) => {
+  document.querySelector("#excuse-table").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-email-fill]");
+    if (!button) return;
+
+    emailDraft = {
+      body: "",
+      subject: `SchoolMed - ${button.dataset.emailStudent}`,
+      to: button.dataset.emailFill,
+    };
+    activeSectionByRole.Coordinador = "coord-message";
+    render();
+  });
+
+  document.querySelector("#email-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const to = document.querySelector("#email-to").value;
     if (!to) return;
-    const subject = encodeURIComponent(document.querySelector("#email-subject").value || "SchoolMed");
-    const body = encodeURIComponent(document.querySelector("#email-message").value || "");
-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+    const subject = document.querySelector("#email-subject").value || "SchoolMed";
+    const body = document.querySelector("#email-message").value || "";
+
+    try {
+      const data = await apiRequest("/emails/send", {
+        method: "POST",
+        body: JSON.stringify({ body, subject, to }),
+      });
+      alert(data.emailSent ? "Correo enviado por Brevo." : "No se pudo confirmar el envio del correo.");
+      emailDraft = null;
+      await syncRemoteData({ force: true });
+    } catch (error) {
+      alert(error.message);
+    }
   });
 }
 
@@ -839,26 +905,25 @@ function renderGuardian() {
   document.querySelector("#guardian-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const get = (id) => document.querySelector(`#${id}`).value.trim();
-    const file = document.querySelector("#file").files[0]?.name || "Soporte pendiente";
     const guardianName = hasGuardianSession ? name : get("guardian-name");
     const guardianEmail = hasGuardianSession ? email : get("guardian-email");
     const guardianPhone = hasGuardianSession ? (sessionUser.phone || get("guardian-phone")) : get("guardian-phone");
     if (!guardianName || !guardianEmail || !get("student") || !get("grade") || !get("start") || !get("end")) return;
 
     try {
-      const created = await apiRequest("/medical-excuses", {
-        method: "POST",
-        body: JSON.stringify({
-          nombreEstudiante: get("student"),
-          documentoEstudiante: get("document"),
-          grado: get("grade"),
-          grupo: get("group").toUpperCase(),
-          motivo: get("reason") || "Excusa medica",
-          descripcion: get("description") || "Soporte medico adjunto.",
-          fechaInicio: get("start"),
-          fechaFin: get("end"),
-        }),
-      });
+      const formData = new FormData();
+      const support = document.querySelector("#file").files[0];
+      formData.append("nombreEstudiante", get("student"));
+      formData.append("documentoEstudiante", get("document"));
+      formData.append("grado", get("grade"));
+      formData.append("grupo", get("group").toUpperCase());
+      formData.append("motivo", get("reason") || "Excusa medica");
+      formData.append("descripcion", get("description") || "Soporte medico adjunto.");
+      formData.append("fechaInicio", get("start"));
+      formData.append("fechaFin", get("end"));
+      if (support) formData.append("archivo", support);
+
+      const created = await apiFormRequest("/medical-excuses", formData, { method: "POST" });
 
       let excuse = created.excusa;
       const code = prompt("Te enviamos un codigo al correo. Escribelo para enviar la excusa a revision.");
@@ -871,10 +936,7 @@ function renderGuardian() {
         excuse = verified.excusa;
       }
 
-      upsertRemoteExcuses([excuse]);
-      appState.feed.unshift(`${guardianName} envio una excusa para ${get("student")}.`);
-      saveState();
-      render();
+      await syncRemoteData({ force: true });
     } catch (error) {
       alert(`No se pudo enviar la excusa: ${error.message}`);
     }
@@ -993,7 +1055,7 @@ function renderTeacher() {
 
 // Decide que vista renderizar segun el rol activo.
 function render() {
-  syncRemoteExcuses(activeRole);
+  syncRemoteData();
   renderTabs();
   setShell();
 
