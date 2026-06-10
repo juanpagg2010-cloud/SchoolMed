@@ -181,6 +181,26 @@ router.get("/teacher", authorizeRoles(TEACHER, COORDINATOR), async (req, res) =>
   }
 });
 
+// Ruta para validar una excusa aprobada por codigo o QR. Solo coordinadores.
+router.get("/validate/:code", authorizeRoles(COORDINATOR), async (req, res) => {
+  try {
+    const excusa = await medicalExcuseService.getApprovedExcuseByValidationCode(req.params.code);
+
+    return res.status(200).json({
+      ok: true,
+      accepted: true,
+      message: "Excusa medica aceptada y verificada.",
+      excusa,
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      accepted: false,
+      message: err.message || "No aparece una excusa medica aceptada con ese codigo.",
+    });
+  }
+});
+
 // Ruta para aprobar una excusa medica. Solo coordinadores.
 router.patch("/:id/approve", authorizeRoles(COORDINATOR), validateObjectId("id"), async (req, res) => {
   try {
