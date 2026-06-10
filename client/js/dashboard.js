@@ -904,6 +904,7 @@ function renderGuardian() {
 
   document.querySelector("#guardian-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const submitButton = event.submitter;
     const get = (id) => document.querySelector(`#${id}`).value.trim();
     const guardianName = hasGuardianSession ? name : get("guardian-name");
     const guardianEmail = hasGuardianSession ? email : get("guardian-email");
@@ -911,6 +912,11 @@ function renderGuardian() {
     if (!guardianName || !guardianEmail || !get("student") || !get("grade") || !get("start") || !get("end")) return;
 
     try {
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "Enviando...";
+      }
+
       const formData = new FormData();
       const support = document.querySelector("#file").files[0];
       formData.append("nombreEstudiante", get("student"));
@@ -926,7 +932,8 @@ function renderGuardian() {
       const created = await apiFormRequest("/medical-excuses", formData, { method: "POST" });
 
       let excuse = created.excusa;
-      const code = prompt("Te enviamos un codigo al correo. Escribelo para enviar la excusa a revision.");
+      alert("Excusa creada. Te enviamos un codigo al correo para confirmar el envio a coordinacion.");
+      const code = prompt("Escribe el codigo recibido para mandar la excusa al coordinador.");
 
       if (code?.trim()) {
         const verified = await apiRequest(`/medical-excuses/${excuse._id || excuse.id}/verify-code`, {
@@ -934,11 +941,20 @@ function renderGuardian() {
           body: JSON.stringify({ codigo: code.trim() }),
         });
         excuse = verified.excusa;
+        alert("Excusa medica creada y enviada al coordinador para revision.");
+      } else {
+        alert("La excusa quedo creada, pero aun no fue enviada al coordinador. Debes verificar el codigo del correo.");
       }
 
+      activeSectionByRole.Acudiente = "guardian-track";
       await syncRemoteData({ force: true });
     } catch (error) {
       alert(`No se pudo enviar la excusa: ${error.message}`);
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Enviar excusa";
+      }
     }
   });
   bindCommandShell();
