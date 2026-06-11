@@ -41,6 +41,7 @@ const medicalExcuseSchema = new Schema(
       ruta: String,
       tipo: String,
       tamano: Number,
+      data: Buffer,
     },
     fechaInicio: {
       type: Date,

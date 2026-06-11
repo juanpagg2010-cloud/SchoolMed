@@ -1,19 +1,10 @@
 import multer from "multer";
-import { mkdirSync } from "node:fs";
-import { extname, join } from "node:path";
+import { extname } from "node:path";
 
-const uploadPath = join(process.cwd(), "uploads");
-mkdirSync(uploadPath, { recursive: true });
-
-// Configura almacenamiento local para soportes medicos subidos por acudientes.
-const storage = multer.diskStorage({
-  destination: uploadPath,
-  filename: (req, file, cb) => {
-    const safeExtension = extname(file.originalname || "").toLowerCase();
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExtension}`;
-    cb(null, uniqueName);
-  },
-});
+export const buildStoredFilename = (originalName = "") => {
+  const safeExtension = extname(originalName || "").toLowerCase();
+  return `${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExtension}`;
+};
 
 // Limita formatos comunes de soportes: imagenes y PDF.
 const fileFilter = (req, file, cb) => {
@@ -32,7 +23,7 @@ export const uploadMedicalSupport = multer({
   limits: {
     fileSize: 5 * 1024 * 1024,
   },
-  storage,
+  storage: multer.memoryStorage(),
 });
 
 const faceFileFilter = (req, file, cb) => {

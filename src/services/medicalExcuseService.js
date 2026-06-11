@@ -3,6 +3,7 @@ import User from "../models/userModel.js";
 import { createActivity } from "./activityService.js";
 import { sendMedicalExcuseReviewResult } from "./emailService.js";
 import { requireRecentFaceVerification } from "./faceService.js";
+import { buildStoredFilename } from "../middlewares/uploadMiddleware.js";
 import crypto from "node:crypto";
 
 const VALIDATION_PREFIX = "SM";
@@ -37,9 +38,10 @@ const getUploadedFile = (file) => {
   }
 
   return {
+    data: file.buffer,
     nombreOriginal: file.originalname,
-    nombreArchivo: file.filename,
-    ruta: file.path,
+    nombreArchivo: file.filename || buildStoredFilename(file.originalname),
+    ruta: "",
     tipo: file.mimetype,
     tamano: file.size,
   };
@@ -131,7 +133,7 @@ export const createMedicalExcuse = async (userId, userEmail, payload, file) => {
     identityVerification,
   });
 
-  const publicExcuse = await MedicalExcuse.findById(excusa._id);
+  const publicExcuse = await MedicalExcuse.findById(excusa._id).select("-archivo.data");
 
   await createActivity({
     actorId: userId,
@@ -145,7 +147,7 @@ export const createMedicalExcuse = async (userId, userEmail, payload, file) => {
 
 // Lista las excusas creadas por el acudiente autenticado.
 export const getGuardianExcuses = (userId) => {
-  return MedicalExcuse.find({ acudienteId: userId }).sort({ createdAt: -1 });
+  return MedicalExcuse.find({ acudienteId: userId }).select("-archivo.data").sort({ createdAt: -1 });
 };
 
 // Lista excusas visibles para coordinacion.
@@ -157,6 +159,7 @@ export const getCoordinatorExcuses = ({ grado, grupo, estado } = {}) => {
   if (estado) filtro.estado = estado;
 
   return MedicalExcuse.find(filtro)
+    .select("-archivo.data")
     .populate("acudienteId", "name email phone")
     .populate("coordinadorId", "name email")
     .sort({ grado: 1, grupo: 1, createdAt: -1 });
@@ -165,6 +168,7 @@ export const getCoordinatorExcuses = ({ grado, grupo, estado } = {}) => {
 // Agrupa excusas visibles para coordinacion por grado escolar.
 export const getExcusesGroupedByGrade = async () => {
   const excusas = await MedicalExcuse.find()
+    .select("-archivo.data")
     .populate("acudienteId", "name email phone")
     .populate("coordinadorId", "name email")
     .sort({ grado: 1, grupo: 1, createdAt: -1 });
@@ -185,11 +189,13 @@ export const getTeacherExcuses = async ({ grado, grupo } = {}) => {
   if (grado) filtro.grado = grado;
   if (grupo) filtro.grupo = grupo.toUpperCase();
 
-  const excusas = await MedicalExcuse.find(filtro).sort({
-    grado: 1,
-    grupo: 1,
-    fechaFin: 1,
-  });
+  const excusas = await MedicalExcuse.find(filtro)
+    .select("-archivo.data")
+    .sort({
+      grado: 1,
+      grupo: 1,
+      fechaFin: 1,
+    });
 
   return excusas.map((excusa) => ({
     ...excusa.toObject(),
@@ -200,6 +206,7 @@ export const getTeacherExcuses = async ({ grado, grupo } = {}) => {
 // Consulta una excusa por id con datos basicos del acudiente y coordinador.
 export const getMedicalExcuseById = async (id) => {
   const excusa = await MedicalExcuse.findById(id)
+    .select("-archivo.data")
     .populate("acudienteId", "name email phone")
     .populate("coordinadorId", "name email");
 
@@ -225,6 +232,7 @@ export const getApprovedExcuseByValidationCode = async (code) => {
     codigoValidacion,
     estado: "Aprobada",
   })
+    .select("-archivo.data")
     .populate("acudienteId", "name email phone")
     .populate("coordinadorId", "name email");
 
@@ -277,6 +285,7 @@ export const reviewMedicalExcuse = async (id, coordinatorId, review) => {
       : { $set: reviewPayload },
     { new: true, runValidators: true },
   )
+    .select("-archivo.data")
     .populate("acudienteId", "name email phone")
     .populate("coordinadorId", "name email");
 

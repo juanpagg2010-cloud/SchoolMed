@@ -3,6 +3,7 @@ import express from "express";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { errorHandler, notFound } from "./middlewares/errorMiddleware.js";
+import MedicalExcuse from "./models/medicalExcuse.js";
 import routes from "./routes/index.js";
 
 const app = express();
@@ -16,6 +17,33 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(clientPath));
 app.use("/uploads", express.static(uploadsPath));
+
+// Sirve soportes medicos guardados en MongoDB cuando no existen en disco.
+app.get("/uploads/:filename", async (req, res, next) => {
+  try {
+    const excusa = await MedicalExcuse.findOne(
+      { "archivo.nombreArchivo": req.params.filename },
+      { archivo: 1 },
+    );
+    const archivo = excusa?.archivo;
+
+    if (!archivo?.data?.length) {
+      return res.status(404).json({
+        ok: false,
+        message: "Archivo no encontrado. Si es una excusa antigua, vuelve a subir el soporte.",
+      });
+    }
+
+    res.setHeader("Content-Type", archivo.tipo || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(archivo.nombreOriginal || archivo.nombreArchivo)}"`,
+    );
+    return res.send(archivo.data);
+  } catch (error) {
+    return next(error);
+  }
+});
 
 // Ruta base para comprobar rapidamente que la API esta viva.
 app.get("/", (req, res) => {
