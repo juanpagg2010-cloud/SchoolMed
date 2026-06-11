@@ -374,6 +374,7 @@ function mapExcuseFromApi(excuse) {
     end: String(excuse.fechaFin || "").slice(0, 10),
     status: excuse.estado || "PendienteRevision",
     file: file.nombreOriginal || file.nombreArchivo || "Sin archivo",
+    fileUrl: file.nombreArchivo ? `/uploads/${encodeURIComponent(file.nombreArchivo)}` : "",
     validationCode: excuse.codigoValidacion || "",
     qrPayload: excuse.qrPayload || excuse.codigoValidacion || "",
   };
@@ -1030,6 +1031,9 @@ function renderCoordinatorExcuses() {
             <button data-approve="${excuse.id}" type="button" class="mini-action text-emerald-100">Aceptar</button>
             <button data-reject="${excuse.id}" type="button" class="mini-action text-red-100">Rechazar</button>
             <button data-email-fill="${escapeHtml(excuse.email)}" data-email-student="${escapeHtml(excuse.student)}" type="button" class="mini-action text-sky-100">Correo</button>
+            ${excuse.fileUrl
+              ? `<a href="${escapeHtml(excuse.fileUrl)}" target="_blank" rel="noopener noreferrer" class="mini-action text-cyan-100">Ver soporte</a>`
+              : `<span class="mini-action cursor-not-allowed text-slate-500 opacity-60">Sin soporte</span>`}
           </div>
         </article>
       `).join("") || `<p class="px-4 py-8 text-sm font-bold text-slate-400">No hay excusas con esos filtros.</p>`}

@@ -1885,6 +1885,10 @@ select.field option:checked,
   flex: 1 1 0%;
 }
 
+.cursor-not-allowed {
+  cursor: not-allowed;
+}
+
 .resize-none {
   resize: none;
 }
@@ -2642,6 +2646,10 @@ select.field option:checked,
 
 .accent-cyan-300 {
   accent-color: #67e8f9;
+}
+
+.opacity-60 {
+  opacity: 0.6;
 }
 
 .shadow-2xl {
