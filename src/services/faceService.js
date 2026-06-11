@@ -43,6 +43,11 @@ const normalizeImageBytes = (file) => {
   return file.buffer;
 };
 
+const hasRecentSuccessfulVerification = (user) => {
+  const lastVerifiedAt = user.faceAuth?.lastVerifiedAt ? new Date(user.faceAuth.lastVerifiedAt) : null;
+  return Boolean(lastVerifiedAt && Date.now() - lastVerifiedAt.getTime() <= getVerificationTtlMs());
+};
+
 const ensureCollection = async () => {
   const collectionId = getCollectionId();
 
@@ -92,6 +97,11 @@ export const registerGuardianFace = async (userId, file) => {
   const collectionId = await ensureCollection();
   const imageBytes = normalizeImageBytes(file);
   const externalFaceId = String(user._id);
+  const alreadyHasFace = Boolean(user.faceAuth?.enabled && user.faceAuth?.faceId);
+
+  if (alreadyHasFace && !hasRecentSuccessfulVerification(user)) {
+    throw makeHttpError("Para actualizar tu biometria primero debes validar el rostro registrado actualmente.", 403);
+  }
 
   await deletePreviousFace(user);
 
@@ -188,7 +198,7 @@ export const requireRecentFaceVerification = async (userId) => {
   }
 
   const lastVerifiedAt = user.faceAuth.lastVerifiedAt ? new Date(user.faceAuth.lastVerifiedAt) : null;
-  const isFresh = lastVerifiedAt && Date.now() - lastVerifiedAt.getTime() <= getVerificationTtlMs();
+  const isFresh = hasRecentSuccessfulVerification(user);
 
   if (!isFresh) {
     throw makeHttpError("Confirma tu identidad con el escaneo facial antes de enviar la excusa.", 403);

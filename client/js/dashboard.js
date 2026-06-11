@@ -318,11 +318,22 @@ async function sendFaceCapture(path, blob) {
   return apiFormRequest(path, formData, { method: "POST" });
 }
 
-async function registerGuardianFaceFromDashboard() {
+async function registerGuardianFaceFromDashboard({ requireCurrentFace = false } = {}) {
+  if (requireCurrentFace) {
+    const currentFaceBlob = await captureFaceBlob({
+      actionLabel: "Validar rostro actual",
+      copy: "Antes de actualizar tu biometria, confirma el rostro que registraste inicialmente.",
+      title: "Confirma tu patron actual",
+    });
+    await sendFaceCapture("/face/verify", currentFaceBlob);
+  }
+
   const faceBlob = await captureFaceBlob({
-    actionLabel: "Registrar rostro",
-    copy: "Esta captura quedara asociada a tu cuenta para validar futuros envios de excusas.",
-    title: "Registra tus datos biometricos",
+    actionLabel: requireCurrentFace ? "Guardar nuevo rostro" : "Registrar rostro",
+    copy: requireCurrentFace
+      ? "Ahora toma la nueva captura que quedara asociada a tu cuenta."
+      : "Esta captura quedara asociada a tu cuenta para validar futuros envios de excusas.",
+    title: requireCurrentFace ? "Registra el nuevo patron" : "Registra tus datos biometricos",
   });
   const data = await sendFaceCapture("/face/register", faceBlob);
   updateSessionUser(data.user);
@@ -1754,9 +1765,11 @@ function renderGuardian() {
 
     try {
       button.disabled = true;
-      button.textContent = "Registrando...";
-      await registerGuardianFaceFromDashboard();
-      alert("Datos biometricos faciales registrados correctamente.");
+      button.textContent = faceEnabled ? "Validando..." : "Registrando...";
+      await registerGuardianFaceFromDashboard({ requireCurrentFace: faceEnabled });
+      alert(faceEnabled
+        ? "Datos biometricos faciales actualizados correctamente. Para enviar una excusa valida el nuevo rostro."
+        : "Datos biometricos faciales registrados correctamente.");
       renderGuardian();
     } catch (error) {
       alert(error.message);
