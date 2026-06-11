@@ -34,3 +34,22 @@ export const uploadMedicalSupport = multer({
   },
   storage,
 });
+
+const faceFileFilter = (req, file, cb) => {
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+  if (!allowedTypes.includes(file.mimetype)) {
+    cb(new Error("La captura facial debe ser JPG, PNG o WEBP."));
+    return;
+  }
+
+  cb(null, true);
+};
+
+export const uploadFaceCapture = multer({
+  fileFilter: faceFileFilter,
+  limits: {
+    fileSize: 4 * 1024 * 1024,
+  },
+  storage: multer.memoryStorage(),
+});

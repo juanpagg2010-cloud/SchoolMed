@@ -91,6 +91,27 @@ const medicalExcuseSchema = new Schema(
     fechaCodigoValidacion: {
       type: Date,
     },
+    identityVerification: {
+      method: {
+        type: String,
+        enum: ["face-scan"],
+      },
+      provider: {
+        type: String,
+        default: "aws-rekognition",
+      },
+      success: {
+        type: Boolean,
+        default: false,
+      },
+      similarity: {
+        type: Number,
+        default: 0,
+      },
+      verifiedAt: {
+        type: Date,
+      },
+    },
   },
   {
     timestamps: true,

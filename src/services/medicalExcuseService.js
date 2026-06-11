@@ -2,6 +2,7 @@ import MedicalExcuse from "../models/medicalExcuse.js";
 import User from "../models/userModel.js";
 import { createActivity } from "./activityService.js";
 import { sendMedicalExcuseReviewResult } from "./emailService.js";
+import { requireRecentFaceVerification } from "./faceService.js";
 import crypto from "node:crypto";
 
 const VALIDATION_PREFIX = "SM";
@@ -113,6 +114,8 @@ export const createMedicalExcuse = async (userId, userEmail, payload, file) => {
     throw error;
   }
 
+  const identityVerification = await requireRecentFaceVerification(userId);
+
   const excusa = await MedicalExcuse.create({
     acudienteId: userId,
     nombreEstudiante,
@@ -125,6 +128,7 @@ export const createMedicalExcuse = async (userId, userEmail, payload, file) => {
     fechaInicio,
     fechaFin,
     estado: "PendienteRevision",
+    identityVerification,
   });
 
   const publicExcuse = await MedicalExcuse.findById(excusa._id);

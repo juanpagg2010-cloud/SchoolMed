@@ -212,10 +212,130 @@ function mapUserFromApi(user) {
     active: user.isActive,
     createdAt: user.createdAt || "",
     email: user.email || "",
+    faceAuth: user.faceAuth || {},
     name: user.name || "",
     phone: user.phone || "",
     role: user.role || "Acudiente",
   };
+}
+
+function updateSessionUser(user) {
+  if (!user) return;
+
+  Object.assign(currentUser, user);
+  if (sessionUser) Object.assign(sessionUser, user);
+  localStorage.setItem("schoolmed_user", JSON.stringify(currentUser));
+}
+
+function buildFaceCaptureModal({ actionLabel, copy, title }) {
+  const overlay = document.createElement("div");
+  overlay.className = "fixed inset-0 z-[10000] grid place-items-center bg-slate-950/85 px-4 backdrop-blur-2xl";
+  overlay.innerHTML = `
+    <div class="w-full max-w-lg rounded-lg border border-cyan-200/20 bg-slate-950 p-5 shadow-2xl shadow-cyan-950/30">
+      <p class="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">Validacion biometrica</p>
+      <h2 class="mt-2 text-2xl font-black text-white">${escapeHtml(title)}</h2>
+      <p class="mt-2 text-sm leading-6 text-slate-400">${escapeHtml(copy)}</p>
+      <div class="mt-5 overflow-hidden rounded-lg border border-white/10 bg-slate-900">
+        <video data-face-video autoplay playsinline muted class="aspect-video w-full object-cover"></video>
+      </div>
+      <canvas data-face-canvas class="hidden"></canvas>
+      <p data-face-status class="mt-3 text-sm font-semibold text-slate-400">Activando camara...</p>
+      <div class="mt-5 grid gap-3 sm:grid-cols-2">
+        <button data-face-capture type="button" class="primary-action">${escapeHtml(actionLabel)}</button>
+        <button data-face-cancel type="button" class="secondary-action">Cancelar</button>
+      </div>
+    </div>
+  `;
+
+  return overlay;
+}
+
+async function captureFaceBlob(options) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Tu navegador no permite abrir la camara para validacion facial.");
+  }
+
+  const overlay = buildFaceCaptureModal(options);
+  document.body.appendChild(overlay);
+
+  const video = overlay.querySelector("[data-face-video]");
+  const canvas = overlay.querySelector("[data-face-canvas]");
+  const status = overlay.querySelector("[data-face-status]");
+  const captureButton = overlay.querySelector("[data-face-capture]");
+  const cancelButton = overlay.querySelector("[data-face-cancel]");
+  let stream;
+
+  const close = () => {
+    stream?.getTracks().forEach((track) => track.stop());
+    overlay.remove();
+  };
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: "user",
+        height: { ideal: 720 },
+        width: { ideal: 960 },
+      },
+    });
+    video.srcObject = stream;
+    status.textContent = "Mira de frente a la camara con buena luz.";
+  } catch (error) {
+    close();
+    throw new Error("No se pudo abrir la camara. Revisa permisos del navegador.");
+  }
+
+  return new Promise((resolve, reject) => {
+    cancelButton.addEventListener("click", () => {
+      close();
+      reject(new Error("Validacion facial cancelada."));
+    });
+
+    captureButton.addEventListener("click", () => {
+      const width = video.videoWidth || 960;
+      const height = video.videoHeight || 720;
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(video, 0, 0, width, height);
+      status.textContent = "Procesando captura facial...";
+      canvas.toBlob((blob) => {
+        close();
+        if (!blob) {
+          reject(new Error("No se pudo capturar el rostro."));
+          return;
+        }
+
+        resolve(blob);
+      }, "image/jpeg", 0.9);
+    });
+  });
+}
+
+async function sendFaceCapture(path, blob) {
+  const formData = new FormData();
+  formData.append("faceImage", blob, "face-capture.jpg");
+  return apiFormRequest(path, formData, { method: "POST" });
+}
+
+async function registerGuardianFaceFromDashboard() {
+  const faceBlob = await captureFaceBlob({
+    actionLabel: "Registrar rostro",
+    copy: "Esta captura quedara asociada a tu cuenta para validar futuros envios de excusas.",
+    title: "Registra tus datos biometricos",
+  });
+  const data = await sendFaceCapture("/face/register", faceBlob);
+  updateSessionUser(data.user);
+  return data;
+}
+
+async function verifyGuardianFaceBeforeExcuse() {
+  const faceBlob = await captureFaceBlob({
+    actionLabel: "Validar rostro",
+    copy: "Antes de enviar la excusa confirmaremos que coincide con los datos biometricos registrados.",
+    title: "Confirma tu identidad",
+  });
+  return sendFaceCapture("/face/verify", faceBlob);
 }
 
 // Adapta grados de MongoDB al formato del dashboard.
@@ -1422,6 +1542,10 @@ function renderGuardian() {
   const excuses = hasGuardianSession
     ? appState.excuses.filter((item) => item.email === email || item.guardian === name)
     : appState.excuses;
+  const faceEnabled = Boolean(currentUser.faceAuth?.enabled && currentUser.faceAuth?.faceId);
+  const faceLastVerifiedAt = currentUser.faceAuth?.lastVerifiedAt
+    ? new Date(currentUser.faceAuth.lastVerifiedAt).toLocaleString("es-CO")
+    : "Sin verificacion reciente";
   const guardianTotalPages = Math.max(1, Math.ceil(excuses.length / guardianExcusesPerPage));
   guardianExcusePage = Math.min(Math.max(guardianExcusePage, 1), guardianTotalPages);
   const guardianStartIndex = (guardianExcusePage - 1) * guardianExcusesPerPage;
@@ -1473,6 +1597,16 @@ function renderGuardian() {
 
     <section id="guardian-create" class="stage-panel focus-zone animate-rise">
         ${sectionHeader("Nueva excusa medica", "Sube el soporte y deja los datos completos del estudiante.")}
+        <div class="mb-5 rounded-lg border ${faceEnabled ? "border-emerald-300/25 bg-emerald-300/10" : "border-amber-300/25 bg-amber-300/10"} p-4">
+          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.18em] ${faceEnabled ? "text-emerald-100" : "text-amber-100"}">Biometria facial</p>
+              <h3 class="mt-1 text-lg font-black text-white">${faceEnabled ? "Rostro registrado" : "Registro facial pendiente"}</h3>
+              <p class="mt-1 text-sm font-semibold text-slate-300">${faceEnabled ? `Ultima validacion: ${escapeHtml(faceLastVerifiedAt)}` : "Debes registrar tu rostro antes de poder enviar excusas medicas."}</p>
+            </div>
+            <button id="register-face" type="button" class="secondary-action">${faceEnabled ? "Actualizar rostro" : "Registrar rostro"}</button>
+          </div>
+        </div>
         <form id="guardian-form" class="grid gap-4">
           <div class="grid gap-4 sm:grid-cols-2">
             ${field("Nombre del acudiente", "guardian-name", "text", "Nombre completo")}
@@ -1554,8 +1688,15 @@ function renderGuardian() {
     try {
       if (submitButton) {
         submitButton.disabled = true;
-        submitButton.textContent = "Enviando...";
+        submitButton.textContent = "Validando rostro...";
       }
+
+      if (!faceEnabled) {
+        throw new Error("Primero registra tus datos biometricos faciales.");
+      }
+
+      await verifyGuardianFaceBeforeExcuse();
+      if (submitButton) submitButton.textContent = "Enviando...";
 
       const formData = new FormData();
       const support = document.querySelector("#file").files[0];
@@ -1586,6 +1727,11 @@ function renderGuardian() {
 
       await apiFormRequest("/medical-excuses", formData, { method: "POST" });
       alert("Excusa medica creada y enviada al coordinador para revision.");
+      currentUser.faceAuth = {
+        ...(currentUser.faceAuth || {}),
+        lastVerifiedAt: new Date().toISOString(),
+      };
+      localStorage.setItem("schoolmed_user", JSON.stringify(currentUser));
       activeSectionByRole.Acudiente = "guardian-track";
       guardianExcusePage = 1;
       await syncRemoteData({ force: true });
@@ -1598,6 +1744,24 @@ function renderGuardian() {
       }
     }
   });
+
+  document.querySelector("#register-face").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+
+    try {
+      button.disabled = true;
+      button.textContent = "Registrando...";
+      await registerGuardianFaceFromDashboard();
+      alert("Datos biometricos faciales registrados correctamente.");
+      renderGuardian();
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = faceEnabled ? "Actualizar rostro" : "Registrar rostro";
+    }
+  });
+
   document.querySelector("#guardian-track").addEventListener("click", (event) => {
     const excusePage = event.target.closest("[data-guardian-excuse-page]");
     const excusePrev = event.target.closest("[data-guardian-excuse-prev]");

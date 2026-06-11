@@ -160,6 +160,112 @@ const showSessionTransition = ({ title, message, detail }) => {
   });
 };
 
+const buildFaceCaptureModal = () => {
+  const overlay = document.createElement("div");
+  overlay.className = "fixed inset-0 z-[10000] grid place-items-center bg-slate-950/85 px-4 backdrop-blur-2xl";
+  overlay.innerHTML = `
+    <div class="w-full max-w-lg rounded-2xl border border-teal-200/20 bg-slate-950 p-5 shadow-2xl shadow-teal-950/30">
+      <p class="text-xs font-black uppercase tracking-[0.2em] text-teal-200">Ultimo paso</p>
+      <h2 class="mt-2 text-2xl font-black text-white">Registra tus datos biometricos</h2>
+      <p class="mt-2 text-sm leading-6 text-slate-400">Mira de frente a la camara. Esta captura se usara para validar que eres tu antes de enviar una excusa medica.</p>
+      <div class="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-slate-900">
+        <video data-face-video autoplay playsinline muted class="aspect-video w-full object-cover"></video>
+      </div>
+      <canvas data-face-canvas class="hidden"></canvas>
+      <p data-face-status class="mt-3 text-sm font-semibold text-slate-400">Activando camara...</p>
+      <div class="mt-5 grid gap-3 sm:grid-cols-2">
+        <button data-face-capture type="button" class="rounded-2xl bg-teal-300 px-5 py-4 text-sm font-black text-slate-950 transition hover:bg-teal-200">Registrar rostro</button>
+        <button data-face-cancel type="button" class="rounded-2xl border border-white/10 bg-white/[0.055] px-5 py-4 text-sm font-black text-slate-200 transition hover:border-teal-300 hover:bg-white/[0.1]">Cancelar</button>
+      </div>
+    </div>
+  `;
+
+  return overlay;
+};
+
+const captureFaceBlob = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Tu navegador no permite abrir la camara para validacion facial.");
+  }
+
+  const overlay = buildFaceCaptureModal();
+  document.body.appendChild(overlay);
+
+  const video = overlay.querySelector("[data-face-video]");
+  const canvas = overlay.querySelector("[data-face-canvas]");
+  const status = overlay.querySelector("[data-face-status]");
+  const captureButton = overlay.querySelector("[data-face-capture]");
+  const cancelButton = overlay.querySelector("[data-face-cancel]");
+  let stream;
+
+  const close = () => {
+    stream?.getTracks().forEach((track) => track.stop());
+    overlay.remove();
+  };
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: "user",
+        height: { ideal: 720 },
+        width: { ideal: 960 },
+      },
+    });
+    video.srcObject = stream;
+    status.textContent = "Mira de frente a la camara con buena luz.";
+  } catch (error) {
+    close();
+    throw new Error("No se pudo abrir la camara. Revisa permisos del navegador.");
+  }
+
+  return new Promise((resolve, reject) => {
+    cancelButton.addEventListener("click", () => {
+      close();
+      reject(new Error("El registro facial es obligatorio para terminar el registro."));
+    });
+
+    captureButton.addEventListener("click", () => {
+      const width = video.videoWidth || 960;
+      const height = video.videoHeight || 720;
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(video, 0, 0, width, height);
+      status.textContent = "Registrando rostro...";
+      canvas.toBlob((blob) => {
+        close();
+        if (!blob) {
+          reject(new Error("No se pudo capturar el rostro."));
+          return;
+        }
+
+        resolve(blob);
+      }, "image/jpeg", 0.9);
+    });
+  });
+};
+
+const registerFace = async (token) => {
+  const blob = await captureFaceBlob();
+  const formData = new FormData();
+  formData.append("faceImage", blob, "face-register.jpg");
+
+  const response = await fetch("/api/v1/face/register", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.message || "No se pudo registrar el rostro.");
+  }
+
+  return data;
+};
+
 // Envia al usuario al dashboard correspondiente segun su rol.
 const redirectToDashboard = (user) => {
   const dashboards = {
@@ -208,10 +314,18 @@ form.addEventListener("submit", async (event) => {
     setLoading(true);
     const data = await submitAuth(payload);
     saveSession(data);
+    if (currentMode === "register" && data.user?.role === "Acudiente") {
+      showMessage("Cuenta creada. Falta registrar tu rostro para terminar.", "info");
+      const faceData = await registerFace(data.token);
+      saveSession({
+        token: data.token,
+        user: faceData.user || data.user,
+      });
+    }
     showMessage(
       currentMode === "login"
         ? "Inicio de sesion correcto. Ya puedes continuar al sistema."
-        : "Registro creado correctamente. Tu sesion quedo iniciada.",
+        : "Registro y biometria creados correctamente. Tu sesion quedo iniciada.",
       "success",
     );
     form.reset();
